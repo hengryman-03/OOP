@@ -1221,3 +1221,32 @@ td small {
   letter-spacing: 1px;
   color: var(--muted);
 }
+
+/* Administrator sign-in heading + the toggle link between student/admin login. */
+.auth-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.auth-heading strong {
+  font-size: 15px;
+  color: #3b5448;
+  font-weight: 600;
+}
+.auth-heading span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.auth-switch {
+  border: 0;
+  background: transparent;
+  color: #68765e;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+  align-self: center;
+  text-decoration: underline;
+}
+.auth-switch:hover {
+  color: #3b5448;
+}

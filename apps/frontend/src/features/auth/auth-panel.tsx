@@ -11,7 +11,7 @@ import { api } from '@/lib/study-buddy-api';
 import { Account } from '@/lib/study-buddy-types';
 import { Field } from '@/components/ui';
 
-type Mode = 'login' | 'register';
+type Mode = 'login' | 'register' | 'admin';
 
 /** Turns Firebase's error codes into messages a student can act on. */
 function friendlyMessage(error: unknown): string {
@@ -46,14 +46,25 @@ function friendlyMessage(error: unknown): string {
   }
 }
 
-/** Email/password login and registration backed by Firebase Auth + the backend session. */
+/**
+ * Authentication for the two kinds of users:
+ *  - Students log in / register with Firebase email + password (the main login).
+ *  - The system administrator signs in with a separate configured username + password.
+ */
 export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }) {
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [adminUser, setAdminUser] = useState('');
+  const [adminPass, setAdminPass] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  function goTo(next: Mode) {
+    setMode(next);
+    setError('');
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -61,15 +72,23 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
     setBusy(true);
     setError('');
     try {
+      if (mode === 'admin') {
+        // Administrator login does not use Firebase — credentials go straight to the backend.
+        const account = await api<Account>('/session/admin-login', 'POST', {
+          username: adminUser,
+          password: adminPass,
+        });
+        onAuthed(account);
+        return;
+      }
+
+      // Student login/register: authenticate with Firebase, then exchange the ID token.
       const auth = getFirebaseAuth();
-      // 1. Authenticate with Firebase (in the browser) to obtain an ID token.
       const credential =
         mode === 'register'
           ? await createUserWithEmailAndPassword(auth, email, password)
           : await signInWithEmailAndPassword(auth, email, password);
       const idToken = await credential.user.getIdToken();
-
-      // 2. Hand the token to the backend, which verifies it and creates a server session.
       try {
         const account =
           mode === 'register'
@@ -92,8 +111,53 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
     }
   }
 
-  const register = mode === 'register';
+  // Administrator sign-in form.
+  if (mode === 'admin') {
+    return (
+      <form className="auth-form" onSubmit={submit}>
+        <div className="auth-heading">
+          <strong>Administrator sign-in</strong>
+          <span>For system administrators only.</span>
+        </div>
+        <Field label="Username">
+          <input
+            type="text"
+            required
+            autoComplete="username"
+            value={adminUser}
+            onChange={(e) => setAdminUser(e.target.value)}
+          />
+        </Field>
+        <Field label="Password">
+          <input
+            type="password"
+            required
+            autoComplete="current-password"
+            value={adminPass}
+            onChange={(e) => setAdminPass(e.target.value)}
+          />
+        </Field>
+        <button className="button wide" disabled={busy}>
+          {busy ? 'Signing in…' : 'Sign in as administrator'}
+        </button>
+        {error && (
+          <div role="alert" className="notice error">
+            {error}
+          </div>
+        )}
+        <button
+          type="button"
+          className="auth-switch"
+          onClick={() => goTo('login')}
+        >
+          ← Back to student login
+        </button>
+      </form>
+    );
+  }
 
+  // Student login / register form.
+  const register = mode === 'register';
   return (
     <form className="auth-form" onSubmit={submit}>
       <div className="auth-tabs" role="tablist" aria-label="Login or register">
@@ -102,10 +166,7 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
           role="tab"
           aria-selected={!register}
           className={!register ? 'selected' : ''}
-          onClick={() => {
-            setMode('login');
-            setError('');
-          }}
+          onClick={() => goTo('login')}
         >
           Log in
         </button>
@@ -114,10 +175,7 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
           role="tab"
           aria-selected={register}
           className={register ? 'selected' : ''}
-          onClick={() => {
-            setMode('register');
-            setError('');
-          }}
+          onClick={() => goTo('register')}
         >
           Register
         </button>
@@ -179,6 +237,14 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
           {error}
         </div>
       )}
+
+      <button
+        type="button"
+        className="auth-switch"
+        onClick={() => goTo('admin')}
+      >
+        System administrator sign-in →
+      </button>
     </form>
   );
 }
