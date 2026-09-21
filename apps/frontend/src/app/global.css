@@ -1173,3 +1173,51 @@ td small {
 .public-profile {
   scroll-margin-top: 24px;
 }
+
+/* Login / register form on the welcome screen. */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+  text-align: left;
+}
+.auth-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: rgba(59, 84, 72, 0.06);
+  border-radius: 10px;
+}
+.auth-tabs button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+}
+.auth-tabs button.selected {
+  background: #fff;
+  color: #3b5448;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.account-identity {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.account-identity strong {
+  font-size: 13px;
+  color: #3b5448;
+  font-weight: 500;
+}
+.account-identity span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
