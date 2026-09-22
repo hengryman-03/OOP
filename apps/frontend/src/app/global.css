@@ -1250,3 +1250,76 @@ td small {
 .auth-switch:hover {
   color: #3b5448;
 }
+.link-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--green);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link-button:hover {
+  color: #194b38;
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(32, 61, 54, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+.modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.modal-header .button {
+  min-height: 30px;
+  padding: 6px 10px;
+}
+.modal-section {
+  margin-bottom: 20px;
+}
+.modal-section:last-child {
+  margin-bottom: 0;
+}
+.modal-section h4 {
+  font-size: 12px;
+  font-weight: 650;
+  color: #536759;
+  margin-bottom: 10px;
+}
+.modal-list {
+  display: grid;
+  gap: 8px;
+}
+.modal-list-item {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.modal-list-item strong {
+  display: block;
+  font-size: 12px;
+}
+.modal-list-item small {
+  display: block;
+  color: #94a087;
+  font-size: 10px;
+  margin-top: 2px;
+}

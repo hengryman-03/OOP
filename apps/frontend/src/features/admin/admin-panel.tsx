@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { api } from '@/lib/study-buddy-api';
 import {
   Account,
+  AccountDetail,
   AccountUsage,
   MatchingConfig,
   label,
 } from '@/lib/study-buddy-types';
-import { Badge, Field, useAction } from '@/components/ui';
+import { Badge, Field, Modal, useAction } from '@/components/ui';
 
 export function AdminPanel({
   account,
@@ -25,6 +26,30 @@ export function AdminPanel({
     [draft, setDraft] = useState<Partial<Account> | null>(null),
     [search, setSearch] = useState('');
   const action = useAction(refresh);
+  const [detailFor, setDetailFor] = useState<Account | null>(null),
+    [detail, setDetail] = useState<AccountDetail | null>(null),
+    [detailLoading, setDetailLoading] = useState(false),
+    [detailError, setDetailError] = useState('');
+  async function openDetail(a: Account) {
+    setDetailFor(a);
+    setDetail(null);
+    setDetailError('');
+    setDetailLoading(true);
+    try {
+      setDetail(await api<AccountDetail>(`/admin/accounts/${a.id}/detail`));
+    } catch (e) {
+      setDetailError(
+        e instanceof Error ? e.message : 'Could not load usage details.',
+      );
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+  function closeDetail() {
+    setDetailFor(null);
+    setDetail(null);
+    setDetailError('');
+  }
   const weightLabels = {
     courseWeight: 'Course alignment',
     availabilityWeight: 'Availability overlap',
@@ -284,7 +309,21 @@ export function AdminPanel({
                         </Badge>
                       </td>
                       <td>
-                        {activeConnections} buddies · {groupsJoined} groups
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => openDetail(a)}
+                        >
+                          {activeConnections} buddies
+                        </button>
+                        {' · '}
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() => openDetail(a)}
+                        >
+                          {groupsJoined} groups
+                        </button>
                         <small>{pendingRequests} pending buddy requests</small>
                       </td>
                       <td>
@@ -327,6 +366,57 @@ export function AdminPanel({
           </table>
         </div>
       </section>
+      {detailFor && (
+        <Modal
+          title={`${detailFor.name} · Usage details`}
+          onClose={closeDetail}
+        >
+          {detailLoading && <p className="help">Loading…</p>}
+          {detailError && (
+            <div className="notice error" role="alert">
+              {detailError}
+            </div>
+          )}
+          {detail && (
+            <>
+              <div className="modal-section">
+                <h4>Buddies ({detail.buddies.length})</h4>
+                {detail.buddies.length === 0 ? (
+                  <p className="help">No active buddy connections.</p>
+                ) : (
+                  <div className="modal-list">
+                    {detail.buddies.map((b) => (
+                      <div className="modal-list-item" key={b.id}>
+                        <strong>{b.name}</strong>
+                        <small>{b.id}</small>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="modal-section">
+                <h4>Groups ({detail.groups.length})</h4>
+                {detail.groups.length === 0 ? (
+                  <p className="help">Not a member of any active group.</p>
+                ) : (
+                  <div className="modal-list">
+                    {detail.groups.map((g) => (
+                      <div className="modal-list-item" key={g.id}>
+                        <strong>{g.name}</strong>
+                        <small>
+                          {g.courseCode} · {g.memberIds.length}/
+                          {g.maximumGroupSize} members
+                          {g.leaderId === detailFor.id ? ' · Leader' : ''}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

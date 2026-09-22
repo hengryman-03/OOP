@@ -83,6 +83,14 @@ export interface AccountUsage {
   groupsJoined: number;
   pendingRequests: number;
 }
+export interface BuddySummary {
+  id: string;
+  name: string;
+}
+export interface AccountDetail {
+  buddies: BuddySummary[];
+  groups: StudyGroup[];
+}
 export interface BuddyRequest {
   id: string;
   senderId: string;
