@@ -8,9 +8,11 @@ import org.springframework.transaction.annotation.Transactional;
 import studybuddy.backend.admin.model.UserAccount;
 import studybuddy.backend.group.model.*;
 import studybuddy.backend.student.model.*;
+import studybuddy.backend.venue.model.Room;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.List;
 
 /** Deterministic fictional data is installed once, never restored after account deletion. */
@@ -116,6 +118,129 @@ public class DemoDataInitializer implements ApplicationRunner {
             group.setMemberIds(List.of(group.getLeaderId(), "S0" + (11 + i)));
             repository.save(group.getId(), group);
         }
+
+        // --- Demo venue data: fictional SMU-style rooms for the Venue Recommendation feature.
+        // Clearly demonstration data — no real SMU room booking system is involved.
+        record RoomSeed(
+                String building,
+                String roomNumber,
+                int capacity,
+                boolean whiteboard,
+                boolean projector,
+                boolean power,
+                List<AvailabilitySlot> hours) {}
+        List<RoomSeed> roomSeeds =
+                List.of(
+                        new RoomSeed("SCIS 1", "B1-1", 6, true, true, true, weekdays(9, 21)),
+                        new RoomSeed("SCIS 1", "B1-2", 10, true, true, true, weekdays(9, 21)),
+                        new RoomSeed("SCIS 1", "3-2", 4, true, false, true, weekdays(8, 20)),
+                        new RoomSeed("SCIS 2", "GSR 2-1", 8, true, true, true, weekdays(9, 22)),
+                        new RoomSeed("SCIS 2", "GSR 2-2", 12, false, true, true, weekdays(9, 22)),
+                        new RoomSeed("SCIS 2", "GSR 2-3", 5, true, false, false, weekdays(9, 22)),
+                        new RoomSeed(
+                                "School of Economics", "SOE 1-3", 6, false, true, true, weekdays(8, 18)),
+                        new RoomSeed(
+                                "School of Economics", "SOE 2-1", 15, true, true, true, weekdays(8, 18)),
+                        new RoomSeed(
+                                "Li Ka Shing Library",
+                                "LKS Discussion Rm 1",
+                                4,
+                                true,
+                                false,
+                                false,
+                                sevenDays(8, 22)),
+                        new RoomSeed(
+                                "Li Ka Shing Library",
+                                "LKS Discussion Rm 2",
+                                8,
+                                true,
+                                true,
+                                false,
+                                sevenDays(8, 22)),
+                        new RoomSeed(
+                                "Li Ka Shing Library",
+                                "LKS Discussion Rm 3",
+                                4,
+                                false,
+                                false,
+                                true,
+                                sevenDays(8, 22)),
+                        new RoomSeed(
+                                "Administration Building",
+                                "AB Seminar Rm 1",
+                                20,
+                                true,
+                                true,
+                                true,
+                                weekdays(9, 17)),
+                        new RoomSeed(
+                                "Yong Pung How School of Law",
+                                "YPHSL 2-4",
+                                6,
+                                true,
+                                true,
+                                true,
+                                weekdays(9, 19)),
+                        new RoomSeed(
+                                "Yong Pung How School of Law",
+                                "YPHSL 3-1",
+                                10,
+                                false,
+                                true,
+                                true,
+                                weekdays(9, 19)),
+                        new RoomSeed(
+                                "Campus Green Building", "CGB Pod A", 3, false, false, true, sevenDays(10, 20)),
+                        new RoomSeed(
+                                "Campus Green Building", "CGB Pod B", 3, true, false, true, sevenDays(10, 20)),
+                        new RoomSeed(
+                                "Prinsep Street Residences",
+                                "PSR Study Rm 1",
+                                6,
+                                true,
+                                true,
+                                true,
+                                weekdays(10, 22)),
+                        new RoomSeed(
+                                "Prinsep Street Residences",
+                                "PSR Study Rm 2",
+                                12,
+                                true,
+                                true,
+                                true,
+                                weekdays(10, 22)));
+        int roomIndex = 1;
+        for (RoomSeed rs : roomSeeds) {
+            Room room = new Room();
+            room.setId("R" + String.format("%03d", roomIndex++));
+            room.setBuilding(rs.building());
+            room.setRoomNumber(rs.roomNumber());
+            room.setCapacity(rs.capacity());
+            room.setHasWhiteboard(rs.whiteboard());
+            room.setHasProjector(rs.projector());
+            room.setHasPowerSockets(rs.power());
+            room.setWeeklyAvailability(rs.hours());
+            repository.save(room.getId(), room);
+        }
+
         repository.save("v1", new SeedMarker(true));
+    }
+
+    private static List<AvailabilitySlot> weekdays(int openHour, int closeHour) {
+        return List.of(
+                        DayOfWeek.MONDAY,
+                        DayOfWeek.TUESDAY,
+                        DayOfWeek.WEDNESDAY,
+                        DayOfWeek.THURSDAY,
+                        DayOfWeek.FRIDAY)
+                .stream()
+                .map(d -> new AvailabilitySlot(d, LocalTime.of(openHour, 0), LocalTime.of(closeHour, 0)))
+                .toList();
+    }
+
+    private static List<AvailabilitySlot> sevenDays(int openHour, int closeHour) {
+        return Arrays.stream(DayOfWeek.values())
+                .map(d -> new AvailabilitySlot(d, LocalTime.of(openHour, 0), LocalTime.of(closeHour, 0)))
+                .toList();
     }
 }

@@ -6,12 +6,21 @@ import {
   Account,
   Course,
   MembershipRequest,
+  Room,
   StudentProfile,
   StudyGroup,
+  StudySession,
   label,
 } from '@/lib/study-buddy-types';
 import { Avatar, Badge, Empty, Field, Times, useAction } from '@/components/ui';
 import { GroupEditor } from './group-editor';
+
+const emptySessionForm = {
+  sessionDate: '',
+  startTime: '18:00',
+  endTime: '20:00',
+  maxGroupSize: 5,
+};
 
 export function GroupsPanel({
   account,
@@ -19,6 +28,8 @@ export function GroupsPanel({
   students,
   groups,
   requests,
+  sessions,
+  rooms,
   refresh,
 }: {
   account: Account;
@@ -26,6 +37,8 @@ export function GroupsPanel({
   students: StudentProfile[];
   groups: StudyGroup[];
   requests: MembershipRequest[];
+  sessions: StudySession[];
+  rooms: Room[];
   refresh: () => void;
 }) {
   const [editor, setEditor] = useState<StudyGroup | 'new' | null>(null),
@@ -33,6 +46,8 @@ export function GroupsPanel({
     [course, setCourse] = useState('');
   const [selectedId, setSelectedId] = useState(''),
     [replacement, setReplacement] = useState('');
+  const [planningSession, setPlanningSession] = useState(false),
+    [sessionForm, setSessionForm] = useState(emptySessionForm);
   const action = useAction(refresh),
     admin = account.role === 'SYSTEM_ADMINISTRATOR';
   const selected = groups.find((g) => g.id === selectedId);
@@ -155,6 +170,8 @@ export function GroupsPanel({
                     onClick={() => {
                       setSelectedId(g.id ?? '');
                       setReplacement('');
+                      setPlanningSession(false);
+                      setSessionForm(emptySessionForm);
                     }}
                   >
                     {manage(g) ? 'Manage group' : 'View members'}
@@ -243,6 +260,161 @@ export function GroupsPanel({
               </div>
             ))}
           </div>
+          <h3 className="divider">Sessions</h3>
+          {sessions.filter((s) => s.groupId === selected.id).length === 0 ? (
+            <p className="muted-text">No sessions planned yet.</p>
+          ) : (
+            <div className="member-list">
+              {sessions
+                .filter((s) => s.groupId === selected.id)
+                .map((s) => {
+                  const room = rooms.find((r) => r.id === s.bookedRoomId);
+                  return (
+                    <div key={s.id}>
+                      <div className="person-heading">
+                        <span>
+                          {s.sessionDate} · {s.startTime.slice(0, 5)}–
+                          {s.endTime.slice(0, 5)} · up to {s.maxGroupSize}
+                        </span>
+                        {room ? (
+                          <Badge>
+                            {room.building} · {room.roomNumber}
+                          </Badge>
+                        ) : (
+                          <Badge muted>No venue booked yet</Badge>
+                        )}
+                      </div>
+                      {manage(selected) && (
+                        <button
+                          className="button ghost"
+                          disabled={action.busy}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                'Cancel this session? Any room booking will be released.',
+                              )
+                            )
+                              void action.run(
+                                () => api(`/sessions/${s.id}/cancel`, 'POST'),
+                                'Session cancelled.',
+                              );
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+          {manage(selected) && selected.status === 'ACTIVE' && (
+            <>
+              {!planningSession ? (
+                <button
+                  className="button secondary"
+                  onClick={() => setPlanningSession(true)}
+                >
+                  + Plan a session
+                </button>
+              ) : (
+                <form
+                  className="time-filter"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void action
+                      .run(
+                        () =>
+                          api('/sessions', 'POST', {
+                            groupId: selected.id,
+                            sessionDate: sessionForm.sessionDate,
+                            startTime: sessionForm.startTime,
+                            endTime: sessionForm.endTime,
+                            maxGroupSize: sessionForm.maxGroupSize,
+                          }),
+                        'Session planned.',
+                      )
+                      .then((ok) => {
+                        if (ok) {
+                          setPlanningSession(false);
+                          setSessionForm(emptySessionForm);
+                        }
+                      });
+                  }}
+                >
+                  <Field label="Date">
+                    <input
+                      type="date"
+                      required
+                      value={sessionForm.sessionDate}
+                      onChange={(e) =>
+                        setSessionForm((f) => ({
+                          ...f,
+                          sessionDate: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="From">
+                    <input
+                      type="time"
+                      required
+                      value={sessionForm.startTime}
+                      onChange={(e) =>
+                        setSessionForm((f) => ({
+                          ...f,
+                          startTime: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="Until">
+                    <input
+                      type="time"
+                      required
+                      value={sessionForm.endTime}
+                      onChange={(e) =>
+                        setSessionForm((f) => ({
+                          ...f,
+                          endTime: e.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field label="Group size for this session">
+                    <input
+                      type="number"
+                      required
+                      min={2}
+                      max={20}
+                      value={sessionForm.maxGroupSize}
+                      onChange={(e) =>
+                        setSessionForm((f) => ({
+                          ...f,
+                          maxGroupSize: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </Field>
+                  <div className="actions">
+                    <button className="button" disabled={action.busy}>
+                      Save session
+                    </button>
+                    <button
+                      type="button"
+                      className="button ghost"
+                      onClick={() => {
+                        setPlanningSession(false);
+                        setSessionForm(emptySessionForm);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </>
+          )}
           {manage(selected) && (
             <>
               <h3 className="divider">Membership requests</h3>

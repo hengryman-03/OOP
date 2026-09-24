@@ -9,14 +9,17 @@ import {
   Course,
   MatchingConfig,
   MembershipRequest,
+  Room,
   StudentProfile,
   StudyGroup,
+  StudySession,
 } from '@/lib/study-buddy-types';
 import { Avatar, Badge, Empty } from '@/components/ui';
 import { ProfileEditor } from '@/features/profile/profile-editor';
 import { MatchExplorer } from '@/features/matching/match-explorer';
 import { ConnectionsPanel } from '@/features/connections/connections-panel';
 import { GroupsPanel } from '@/features/groups/groups-panel';
+import { VenuesPanel } from '@/features/venues/venues-panel';
 import { AdminPanel } from '@/features/admin/admin-panel';
 import { AuthPanel } from '@/features/auth/auth-panel';
 import { getFirebaseAuth, firebaseConfigured } from '@/lib/firebase';
@@ -26,12 +29,14 @@ type Tab =
   | 'Find buddies'
   | 'Connections'
   | 'Study groups'
+  | 'Venues'
   | 'My profile'
   | 'Administration';
 const symbols: Record<Tab, string> = {
   'Find buddies': '⌕',
   Connections: '↔',
   'Study groups': '◉',
+  Venues: '⌂',
   'My profile': '▤',
   Administration: '⚙',
 };
@@ -130,6 +135,8 @@ interface WorkspaceData {
   profile: StudentProfile | null;
   accounts: AccountUsage[];
   config: MatchingConfig | null;
+  sessions: StudySession[];
+  rooms: Room[];
 }
 /** Owns navigation and data loading; each domain screen owns only its form/workflow state. */
 function Workspace({
@@ -168,6 +175,8 @@ function Workspace({
       admin
         ? api<MatchingConfig>('/admin/matching-config')
         : Promise.resolve(null),
+      admin ? Promise.resolve([]) : api<StudySession[]>('/sessions/mine'),
+      admin ? Promise.resolve([]) : api<Room[]>('/venues/rooms'),
     ])
       .then(
         ([
@@ -179,6 +188,8 @@ function Workspace({
           profile,
           accounts,
           config,
+          sessions,
+          rooms,
         ]) => {
           if (!cancelled) {
             setData({
@@ -190,6 +201,8 @@ function Workspace({
               profile,
               accounts,
               config,
+              sessions,
+              rooms,
             });
             setError('');
           }
@@ -210,7 +223,7 @@ function Workspace({
   };
   const tabs: Tab[] = admin
     ? ['Administration', 'Study groups']
-    : ['Find buddies', 'Connections', 'Study groups', 'My profile'];
+    : ['Find buddies', 'Connections', 'Study groups', 'Venues', 'My profile'];
   const pending =
     data?.requests.filter(
       (r) => r.receiverId === account.id && r.status === 'PENDING',
@@ -341,6 +354,16 @@ function Workspace({
                       students={data.students}
                       groups={data.groups}
                       requests={data.memberships}
+                      sessions={data.sessions}
+                      rooms={data.rooms}
+                      refresh={refresh}
+                    />
+                  )}
+                  {tab === 'Venues' && (
+                    <VenuesPanel
+                      groups={data.groups}
+                      sessions={data.sessions}
+                      rooms={data.rooms}
                       refresh={refresh}
                     />
                   )}
