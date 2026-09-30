@@ -1,7 +1,6 @@
 package studybuddy.backend.student.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.admin.model.UserAccount;
 import studybuddy.backend.auth.Actor;
@@ -10,6 +9,7 @@ import studybuddy.backend.common.StudyValidation;
 import studybuddy.backend.connection.model.BuddyRequest;
 import studybuddy.backend.connection.model.RequestStatus;
 import studybuddy.backend.persistence.StudyRepository;
+import studybuddy.backend.persistence.StudyTransactional;
 import studybuddy.backend.student.model.*;
 
 import java.util.List;
@@ -74,7 +74,7 @@ public class StudentService {
                     "One-to-one study requires a preferred group size of 2.");
     }
 
-    @Transactional
+    @StudyTransactional
     public StudentProfile save(StudentProfile profile, Actor actor) {
         repository.lock();
         actor.requireStudent();

@@ -1,13 +1,13 @@
 package studybuddy.backend.matching.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.auth.Actor;
 import studybuddy.backend.common.StudyValidation;
 import studybuddy.backend.matching.config.MatchingProperties;
 import studybuddy.backend.matching.model.*;
 import studybuddy.backend.persistence.StudyRepository;
+import studybuddy.backend.persistence.StudyTransactional;
 import studybuddy.backend.student.model.*;
 import studybuddy.backend.student.service.StudentService;
 
@@ -32,7 +32,7 @@ public class MatchingService {
         return repository.find(MatchingProperties.class, "current").orElse(defaults);
     }
 
-    @Transactional
+    @StudyTransactional
     public MatchingProperties updateConfig(MatchingProperties config, Actor actor) {
         repository.lock();
         actor.requireAdmin();

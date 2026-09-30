@@ -1,7 +1,6 @@
 package studybuddy.backend.group.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.auth.Actor;
 import studybuddy.backend.common.DomainException;
@@ -9,6 +8,7 @@ import studybuddy.backend.common.StudyValidation;
 import studybuddy.backend.connection.model.RequestStatus;
 import studybuddy.backend.group.model.*;
 import studybuddy.backend.persistence.StudyRepository;
+import studybuddy.backend.persistence.StudyTransactional;
 import studybuddy.backend.student.service.StudentService;
 
 import java.util.List;
@@ -50,7 +50,7 @@ public class StudyGroupService {
         StudyValidation.slots(group.getAvailability());
     }
 
-    @Transactional
+    @StudyTransactional
     public StudyGroup createGroup(StudyGroup group, Actor actor) {
         repository.lock();
         actor.requireStudent();
@@ -63,7 +63,7 @@ public class StudyGroupService {
         return repository.save(group.getId(), group);
     }
 
-    @Transactional
+    @StudyTransactional
     public StudyGroup updateGroup(String id, StudyGroup updated, Actor actor) {
         repository.lock();
         StudyGroup group = required(id);
@@ -94,7 +94,7 @@ public class StudyGroupService {
                 .toList();
     }
 
-    @Transactional
+    @StudyTransactional
     public MembershipRequest requestToJoin(String id, Actor actor) {
         repository.lock();
         actor.requireStudent();
@@ -117,7 +117,7 @@ public class StudyGroupService {
         return repository.save(request.getId(), request);
     }
 
-    @Transactional
+    @StudyTransactional
     public MembershipRequest decideMembership(String id, RequestStatus decision, Actor actor) {
         repository.lock();
         MembershipRequest request =
@@ -145,7 +145,7 @@ public class StudyGroupService {
         return repository.save(id, request);
     }
 
-    @Transactional
+    @StudyTransactional
     public StudyGroup removeMember(String id, String studentId, Actor actor) {
         repository.lock();
         StudyGroup group = required(id);
@@ -168,7 +168,7 @@ public class StudyGroupService {
         group.setLeaderId(replacement);
     }
 
-    @Transactional
+    @StudyTransactional
     public StudyGroup transferLeadership(String id, String newLeaderId, Actor actor) {
         repository.lock();
         StudyGroup group = required(id);
@@ -192,7 +192,7 @@ public class StudyGroupService {
                         });
     }
 
-    @Transactional
+    @StudyTransactional
     public StudyGroup closeGroup(String id, Actor actor) {
         repository.lock();
         StudyGroup group = required(id);
@@ -201,7 +201,7 @@ public class StudyGroupService {
         return repository.save(id, group);
     }
 
-    @Transactional
+    @StudyTransactional
     public StudyGroup leaderQuits(String id, String replacement, boolean closeGroup, Actor actor) {
         repository.lock();
         StudyGroup group = required(id);

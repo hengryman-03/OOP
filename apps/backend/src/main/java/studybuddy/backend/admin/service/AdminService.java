@@ -1,7 +1,6 @@
 package studybuddy.backend.admin.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.admin.model.UserAccount;
 import studybuddy.backend.auth.Actor;
@@ -9,6 +8,7 @@ import studybuddy.backend.common.DomainException;
 import studybuddy.backend.connection.model.*;
 import studybuddy.backend.group.model.*;
 import studybuddy.backend.persistence.StudyRepository;
+import studybuddy.backend.persistence.StudyTransactional;
 import studybuddy.backend.student.model.StudentProfile;
 
 import java.util.List;
@@ -33,14 +33,17 @@ public class AdminService {
         actor.requireAdmin();
         var requests = repository.all(BuddyRequest.class);
         var groups = repository.all(StudyGroup.class);
+        // One query instead of a lookup per account; each lookup is a network round trip.
+        var profileIds =
+                repository.all(StudentProfile.class).stream()
+                        .map(StudentProfile::getId)
+                        .collect(java.util.stream.Collectors.toSet());
         return repository.all(UserAccount.class).stream()
                 .map(
                         a ->
                                 new AccountUsage(
                                         a,
-                                        repository
-                                                .find(StudentProfile.class, a.getId())
-                                                .isPresent(),
+                                        profileIds.contains(a.getId()),
                                         requests.stream()
                                                 .filter(
                                                         r ->
@@ -104,7 +107,7 @@ public class AdminService {
         return new AccountDetail(buddies, groups);
     }
 
-    @Transactional
+    @StudyTransactional
     public UserAccount saveAccount(UserAccount input, Actor actor) {
         repository.lock();
         actor.requireAdmin();
@@ -146,7 +149,7 @@ public class AdminService {
                         + " deleting the account.");
     }
 
-    @Transactional
+    @StudyTransactional
     public void deleteAccount(String id, Actor actor) {
         repository.lock();
         actor.requireAdmin();

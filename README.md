@@ -1,6 +1,6 @@
 # Study Buddy Matcher System
 
-A complete coursework application built on the supplied Nx monorepo template: a Java 17 Spring Boot backend, a Next.js/React frontend, and file-backed H2 persistence. Students can manage study preferences, find compatible buddies, exchange requests, and manage study groups. Administrators manage accounts and the matching engine.
+A complete coursework application built on the supplied Nx monorepo template: a Java 17 Spring Boot backend, a Next.js/React frontend, and Cloud Firestore persistence shared by the whole team. Students can manage study preferences, find compatible buddies, exchange requests, and manage study groups. Administrators manage accounts and the matching engine.
 
 ## Run locally
 
@@ -72,13 +72,12 @@ apps/
       group/        controller, service, model: membership and leadership rules
       admin/        controller, service, model: account lifecycle and usage
       auth/         demo sessions, trusted Actor, API request interception
-      persistence/  H2 repository and one-time deterministic seed data
+      persistence/  StudyRepository (Firestore + in-memory), transactions, seed data
       common/       validation helpers and consistent API errors
       config/       origins and request-interceptor configuration
     src/main/resources/
       application.properties  external settings and default matching weights
-      schema.sql              database tables
-    src/test/                 real-H2 API integration and concurrency tests
+    src/test/                 API integration and concurrency tests (in-memory repository)
   frontend/
     src/app/                  layout, navigation, and global styling
     src/features/             profile, matching, connections, groups, admin screens
@@ -91,11 +90,16 @@ The original package names, model names, controller/service/model separation, fr
 
 ### Persistence trade-off
 
-`StudyRepository` uses Spring JDBC and H2 to store each template POJO aggregate as JSON in `aggregates(kind, id, payload)`. This preserves the starter's domain models without adding ORM lifecycle behavior or flattening every preference into entities. A separate schema file owns database initialization.
+`StudyRepository` is an interface with two implementations, chosen by `app.repository`:
 
-Every business mutation runs in a database transaction and takes a shared database row lock before reading business state. This makes request duplicate checks, group capacity, and cross-record deletion atomic. Reads deserialize fresh objects, so a failed operation cannot leak partially modified in-memory objects. The trade-off is serialized writes and application-enforced relationships; this suits a small, single-process coursework system. It is not a normalized relational schema or a design for large-scale search. A production version would use purpose-specific tables, constraints, migrations, and narrower locks.
+- `FirestoreStudyRepository` (default) stores each template POJO aggregate as a Cloud Firestore document in a collection named after its class, e.g. `StudentProfile/S001`. Every teammate's backend uses the same Firebase project, so everyone sees the same data.
+- `InMemoryStudyRepository` keeps documents in memory. The automated tests use it, so they never touch the shared data.
 
-The default database is `apps/backend/data/studybuddy.mv.db` when launched with the documented commands. Do not run two backend processes against that file. To make a fresh demonstration database, stop the backend and **move** the `apps/backend/data` directory to a backup location before restarting. Restarting alone preserves all changes. HTTP sessions expire after 60 minutes and are intentionally not persisted.
+This preserves the starter's domain models without adding ORM lifecycle behavior or flattening every preference into entities.
+
+Every business mutation is marked `@StudyTransactional` and runs as one repository transaction (a Firestore transaction in the real app). Saves and deletes are staged and applied together at the end, or discarded if the action fails. Each mutation first calls `repository.lock()`, which reads and rewrites the `_meta/lock` document so that business writes commit one at a time; Firestore retries the later one if two collide. This makes request duplicate checks, group capacity, and cross-record deletion atomic. Reads return fresh objects, so a failed operation cannot leak partially modified in-memory objects. The trade-off is serialized writes, application-enforced relationships, and a network round trip per read; this suits a small coursework system. A production version would use narrower locking and fewer whole-collection reads.
+
+The Firebase service account file (`apps/backend/src/main/resources/StudyBuddy Firebase Service Account.json`, git-ignored) is required to run the backend; share it privately. Demo data is written once, when the `SeedMarker/v1` document is missing. To reset the shared data, delete the collections in the Firebase console (including `SeedMarker`) and restart the backend. HTTP sessions expire after 60 minutes and are intentionally not persisted.
 
 ## Matching formula
 
@@ -140,9 +144,8 @@ Backend environment variables:
 | --- | --- | --- |
 | `SERVER_PORT` | `8080` | Backend port |
 | `SERVER_ADDRESS` | `127.0.0.1` | Bind address |
-| `DATABASE_URL` | `jdbc:h2:file:./data/studybuddy;DB_CLOSE_ON_EXIT=FALSE` | Database URL, relative to backend working directory |
-| `DATABASE_USERNAME` | `sa` | H2 username |
-| `DATABASE_PASSWORD` | empty | Local H2 password |
+| `STUDYBUDDY_REPOSITORY` | `firestore` | `firestore` for the shared cloud data, or `memory` for throwaway in-process data |
+| `FIREBASE_SERVICE_ACCOUNT` | the git-ignored service account file in `src/main/resources` | Firebase Admin credentials |
 | `DEMO_ENABLED` | `true` | Enable explicit demo account selection |
 | `CORS_ALLOWED_ORIGINS` | localhost and 127.0.0.1 on ports 3000 and 4200 | Comma-separated browser origins |
 
@@ -195,7 +198,9 @@ cd ../..
 python3 scripts/smoke_test.py
 ```
 
-The backend suite contains 16 integration tests using real H2 and separate mock HTTP sessions. Coverage includes privacy before/after acceptance/ending, actor spoofing, authorization, nested input validation, request transitions, filters, configurable strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, and admin override.
+The backend suite contains 16 integration tests using the in-memory repository, real repository transactions, and separate mock HTTP sessions. Coverage includes privacy before/after acceptance/ending, actor spoofing, authorization, nested input validation, request transitions, filters, configurable strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, and admin override.
+
+> **Out of date:** `scripts/smoke_test.py` predates Firebase login and the move to Firestore. It still signs in with `accountId` and passes an H2 database URL, so it no longer works. Do not point an updated version at the shared Firestore, because it creates and deletes accounts.
 
 The smoke script starts real backend processes on temporary loopback ports and uses a disposable file database. It verifies profile changes, accepted connections/contact access, group membership, matching configuration, and account deletion survive a restart. It never modifies the normal demo database. Python 3 is only needed for this extra smoke check.
 
@@ -205,10 +210,10 @@ Browser verification covered demo login/switching, new-student onboarding, match
 
 ## Libraries and assumptions
 
-The starter's Spring Boot 3.2.3, Next.js 16, React 19, TypeScript, Tailwind/PostCSS, and Nx tooling are retained. Spring Validation handles input constraints; Spring JDBC and H2 add local persistence; JUnit/Spring Test verify real service/database behavior. No external matching API, paid service, email delivery, or AI service is required.
+The starter's Spring Boot 3.2.3, Next.js 16, React 19, TypeScript, Tailwind/PostCSS, and Nx tooling are retained. Spring Validation handles input constraints; the Firebase Admin SDK provides authentication and Cloud Firestore persistence; Spring AOP applies `@StudyTransactional`; JUnit/Spring Test verify real service/database behavior. No external matching API, paid service, email delivery, or AI service is required.
 
 The template represents one current matching preference and one primary study goal per student/group. Weekly availability can contain multiple slots. There is no chat, notification delivery, attendance tracking, or automatic scheduling in the required scope; request inboxes and group status provide in-app feedback. Personal team assignments and a final presentation deck need the team's own authorship. This implementation includes a demo guide and architecture/UML material, not invented contributions or a completed presentation.
 
 AI assistance was used for implementation, tests, documentation, and verification. Team members should review the code, understand and explain the design, verify the rubric mapping, and accurately disclose AI use in their submission.
 
-Reference documentation: [Spring Boot SQL/JDBC](https://docs.spring.io/spring-boot/docs/3.2.6/reference/html/data.html) and [Next.js rewrites](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites).
+Reference documentation: [Cloud Firestore transactions](https://firebase.google.com/docs/firestore/manage-data/transactions) and [Next.js rewrites](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites).

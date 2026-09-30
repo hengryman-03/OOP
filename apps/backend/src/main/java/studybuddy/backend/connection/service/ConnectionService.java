@@ -1,12 +1,12 @@
 package studybuddy.backend.connection.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.auth.Actor;
 import studybuddy.backend.common.DomainException;
 import studybuddy.backend.connection.model.*;
 import studybuddy.backend.persistence.StudyRepository;
+import studybuddy.backend.persistence.StudyTransactional;
 import studybuddy.backend.student.service.StudentService;
 
 import java.time.Instant;
@@ -23,7 +23,7 @@ public class ConnectionService {
         this.students = students;
     }
 
-    @Transactional
+    @StudyTransactional
     public BuddyRequest sendRequest(BuddyRequest request, Actor actor) {
         repository.lock();
         actor.requireStudent();
@@ -50,7 +50,7 @@ public class ConnectionService {
         return repository.save(request.getId(), request);
     }
 
-    @Transactional
+    @StudyTransactional
     public BuddyRequest updateStatus(String id, RequestStatus status, Actor actor) {
         repository.lock();
         actor.requireStudent();

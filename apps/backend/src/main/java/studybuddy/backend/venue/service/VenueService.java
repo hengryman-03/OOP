@@ -1,13 +1,13 @@
 package studybuddy.backend.venue.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.auth.Actor;
 import studybuddy.backend.common.DomainException;
 import studybuddy.backend.group.model.StudyGroup;
 import studybuddy.backend.group.service.StudyGroupService;
 import studybuddy.backend.persistence.StudyRepository;
+import studybuddy.backend.persistence.StudyTransactional;
 import studybuddy.backend.session.model.StudySession;
 import studybuddy.backend.session.service.StudySessionService;
 import studybuddy.backend.venue.model.Room;
@@ -92,7 +92,7 @@ public class VenueService {
                 .forEach(b -> repository.delete(RoomBooking.class, b.getId()));
     }
 
-    @Transactional
+    @StudyTransactional
     public RoomBooking book(String sessionId, String roomId, Actor actor) {
         repository.lock();
         StudySession session = sessionsSvc.required(sessionId);
@@ -127,7 +127,7 @@ public class VenueService {
         return booking;
     }
 
-    @Transactional
+    @StudyTransactional
     public StudySession release(String sessionId, Actor actor) {
         repository.lock();
         StudySession session = sessionsSvc.required(sessionId);

@@ -3,7 +3,6 @@ package studybuddy.backend.persistence;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.admin.model.UserAccount;
 import studybuddy.backend.group.model.*;
@@ -27,7 +26,7 @@ public class DemoDataInitializer implements ApplicationRunner {
     public record SeedMarker(boolean initialized) {}
 
     @Override
-    @Transactional
+    @StudyTransactional
     public void run(ApplicationArguments args) {
         repository.lock();
         if (repository.find(SeedMarker.class, "v1").isPresent()) return;

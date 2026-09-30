@@ -1,7 +1,6 @@
 package studybuddy.backend.session.service;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.auth.Actor;
 import studybuddy.backend.common.DomainException;
@@ -9,6 +8,7 @@ import studybuddy.backend.group.model.GroupStatus;
 import studybuddy.backend.group.model.StudyGroup;
 import studybuddy.backend.group.service.StudyGroupService;
 import studybuddy.backend.persistence.StudyRepository;
+import studybuddy.backend.persistence.StudyTransactional;
 import studybuddy.backend.session.model.StudySession;
 import studybuddy.backend.venue.model.RoomBooking;
 
@@ -56,7 +56,7 @@ public class StudySessionService {
                     "The session needs an end time after its start, in whole minutes.");
     }
 
-    @Transactional
+    @StudyTransactional
     public StudySession createSession(StudySession session, Actor actor) {
         repository.lock();
         actor.requireStudent();
@@ -101,7 +101,7 @@ public class StudySessionService {
                 .toList();
     }
 
-    @Transactional
+    @StudyTransactional
     public void cancelSession(String id, Actor actor) {
         repository.lock();
         StudySession session = required(id);

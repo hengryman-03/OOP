@@ -1,74 +1,44 @@
 package studybuddy.backend.persistence;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
-
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Stores template POJO aggregates as JSON in H2; domain rules remain in services. Reads deserialize
- * fresh objects so a failed transaction cannot mutate cached state.
+ * Stores template POJO aggregates as documents keyed by type and id; domain rules remain in
+ * services. Reads return fresh objects, so changing a returned object has no effect until it is
+ * saved again.
+ *
+ * <p>Implementations: {@link FirestoreStudyRepository} (the shared cloud database used by the app)
+ * and {@link InMemoryStudyRepository} (a throwaway store used by automated tests).
  */
-@Repository
-public class StudyRepository {
-    private final JdbcTemplate jdbc;
-    private final ObjectMapper json;
+public interface StudyRepository {
 
-    public StudyRepository(JdbcTemplate jdbc, ObjectMapper json) {
-        this.jdbc = jdbc;
-        this.json = json;
-    }
+    /**
+     * Serializes business writes: only one {@link StudyTransactional} action that has called this
+     * can commit at a time. This small demo favors predictable cross-aggregate integrity over
+     * concurrent write throughput. Has no effect outside a transaction.
+     */
+    void lock();
 
-    // All business mutations acquire this database lock inside a transaction. This small
-    // demo favors predictable cross-aggregate integrity over concurrent write throughput.
-    public void lock() {
-        jdbc.queryForObject("SELECT id FROM mutation_lock WHERE id = 1 FOR UPDATE", Integer.class);
-    }
+    <T> List<T> all(Class<T> type);
 
-    public <T> List<T> all(Class<T> type) {
-        return jdbc.query(
-                "SELECT payload FROM aggregates WHERE kind = ? ORDER BY id",
-                (rs, row) -> decode(rs.getString(1), type),
-                type.getSimpleName());
-    }
+    <T> Optional<T> find(Class<T> type, String id);
 
-    public <T> Optional<T> find(Class<T> type, String id) {
-        return jdbc
-                .query(
-                        "SELECT payload FROM aggregates WHERE kind = ? AND id = ?",
-                        (rs, row) -> decode(rs.getString(1), type),
-                        type.getSimpleName(),
-                        id)
-                .stream()
-                .findFirst();
-    }
+    <T> T save(String id, T value);
 
-    public <T> T save(String id, T value) {
-        try {
-            jdbc.update(
-                    "MERGE INTO aggregates (kind, id, payload) KEY(kind, id) VALUES (?, ?, ?)",
-                    value.getClass().getSimpleName(),
-                    id,
-                    json.writeValueAsString(value));
-            return value;
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Cannot serialize aggregate", e);
-        }
-    }
+    void delete(Class<?> type, String id);
 
-    public void delete(Class<?> type, String id) {
-        jdbc.update("DELETE FROM aggregates WHERE kind = ? AND id = ?", type.getSimpleName(), id);
-    }
+    /**
+     * Runs {@code work} so that all of its saves and deletes are applied together, or not at all
+     * if it throws. Reads inside {@code work} see its own pending changes. Joins the current
+     * transaction if one is already active. Implementations may run {@code work} more than once if
+     * another transaction conflicts with it, so it should not depend on side effects of an earlier
+     * attempt.
+     */
+    Object inTransaction(TransactionWork work) throws Throwable;
 
-    private <T> T decode(String value, Class<T> type) {
-        try {
-            return json.readValue(value, type);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Cannot deserialize aggregate", e);
-        }
+    @FunctionalInterface
+    interface TransactionWork {
+        Object run() throws Throwable;
     }
 }

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -16,11 +17,12 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.matching.config.MatchingProperties;
 import studybuddy.backend.matching.service.AvailabilityCalculator;
 import studybuddy.backend.matching.service.MatchingService;
+import studybuddy.backend.persistence.DemoDataInitializer;
+import studybuddy.backend.persistence.InMemoryStudyRepository;
 import studybuddy.backend.persistence.StudyRepository;
 import studybuddy.backend.student.model.AvailabilitySlot;
 import studybuddy.backend.student.model.StudentProfile;
@@ -29,26 +31,35 @@ import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.List;
 
-/** HTTP integration tests use separate sessions and real H2 transactions, not mocked services. */
-@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:studybuddy-tests;DB_CLOSE_DELAY=-1")
+/**
+ * HTTP integration tests use separate sessions and real repository transactions, not mocked
+ * services. They run against the in-memory repository, so they never touch the shared Firestore.
+ */
+@SpringBootTest(properties = "app.repository=memory")
 @AutoConfigureMockMvc
-@Transactional
 class StudyBuddyIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
     @Autowired StudyRepository repository;
     @Autowired MatchingService matching;
+    @Autowired DemoDataInitializer demoData;
 
-    MockHttpSession login(String id) throws Exception {
-        MvcResult result =
-                mvc.perform(
-                                post("/api/session")
-                                        .header("X-StudyBuddy-Request", "1")
-                                        .contentType("application/json")
-                                        .content("{\"accountId\":\"" + id + "\"}"))
-                        .andExpect(status().isOk())
-                        .andReturn();
-        return (MockHttpSession) result.getRequest().getSession();
+    /** Every test starts from freshly seeded demo data. */
+    @BeforeEach
+    void resetData() {
+        ((InMemoryStudyRepository) repository).clear();
+        demoData.run(null);
+    }
+
+    /** Signs in directly: real logins need a Firebase ID token, which tests cannot obtain. */
+    MockHttpSession login(String id) {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("accountId", id);
+        return session;
+    }
+
+    String adminCredentials() {
+        return "{\"username\":\"admin\",\"password\":\"admin123\"}";
     }
 
     JsonNode call(
@@ -102,9 +113,9 @@ class StudyBuddyIntegrationTest {
     void seedsAndSessionBoundaries() throws Exception {
         mvc.perform(get("/api/students")).andExpect(status().isUnauthorized());
         mvc.perform(
-                        post("/api/session")
+                        post("/api/session/admin-login")
                                 .contentType("application/json")
-                                .content("{\"accountId\":\"S001\"}"))
+                                .content(adminCredentials()))
                 .andExpect(status().isForbidden());
         var student = login("S001");
         assertEquals(50, call(student, get("/api/students"), 200).size());
@@ -408,25 +419,23 @@ class StudyBuddyIntegrationTest {
     @Test
     void corsAllowsLocalFrontendButRejectsOtherOrigins() throws Exception {
         mvc.perform(
-                        post("/api/session")
+                        post("/api/session/admin-login")
                                 .header("Origin", "http://127.0.0.1:4200")
                                 .header("X-StudyBuddy-Request", "1")
                                 .contentType("application/json")
-                                .content("{\"accountId\":\"S001\"}"))
+                                .content(adminCredentials()))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://127.0.0.1:4200"));
         mvc.perform(
-                        post("/api/session")
+                        post("/api/session/admin-login")
                                 .header("Origin", "https://untrusted.example")
                                 .header("X-StudyBuddy-Request", "1")
                                 .contentType("application/json")
-                                .content("{\"accountId\":\"S001\"}"))
+                                .content(adminCredentials()))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @Transactional(
-            propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void concurrentAcceptancesCannotOverfillGroup() throws Exception {
         var leader = login("S001");
         var b = login("S002");
