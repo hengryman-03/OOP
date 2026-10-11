@@ -799,6 +799,29 @@ fieldset .help {
   font-size: 10px;
   color: #929d84;
 }
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+.room-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.room-card .section-heading {
+  margin-bottom: 0;
+}
+.booking-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
 .leader-line {
   display: flex;
   align-items: center;
@@ -1073,6 +1096,7 @@ td .button {
   }
   .match-grid,
   .group-grid,
+  .room-grid,
   .form-grid,
   .filter-grid {
     grid-template-columns: 1fr;

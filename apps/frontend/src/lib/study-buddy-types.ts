@@ -106,6 +106,38 @@ export interface MembershipRequest {
   status: RequestStatus;
   createdAt: string;
 }
+export interface StudySession {
+  id?: string;
+  groupId: string;
+  title?: string;
+  sessionDate: string;
+  startTime: string;
+  endTime: string;
+  maxGroupSize: number;
+  plannedBy?: string;
+  bookedRoomId?: string | null;
+}
+export interface Room {
+  id: string;
+  building: string;
+  roomNumber: string;
+  capacity: number;
+  hasWhiteboard: boolean;
+  hasProjector: boolean;
+  hasPowerSockets: boolean;
+  weeklyAvailability: AvailabilitySlot[];
+}
+export interface RoomBooking {
+  id: string;
+  roomId: string;
+  sessionId: string;
+  groupId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  bookedBy: string;
+  bookedAt: string;
+}
 export const modes: StudyMode[] = ['IN_PERSON', 'ONLINE', 'EITHER'];
 export const arrangements: StudyArrangement[] = [
   'ONE_TO_ONE',
