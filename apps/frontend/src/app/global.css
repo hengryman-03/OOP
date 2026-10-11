@@ -1347,3 +1347,33 @@ td small {
   font-size: 10px;
   margin-top: 2px;
 }
+
+/* Pending join requests waiting on a group leader. */
+.notice-count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  border-radius: 9px;
+  padding: 1px 6px;
+  background: #b4572d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  vertical-align: 1px;
+}
+nav b.request-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  padding: 0 6px;
+  background: #b4572d;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
