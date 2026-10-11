@@ -69,11 +69,25 @@ export function GroupsPanel({
         : g.status === 'ACTIVE' &&
           (scope === 'My groups'
             ? g.memberIds.includes(account.id)
-            : scope === 'I lead'
+            : scope === 'Groups I lead'
               ? g.leaderId === account.id
-              : true)),
+              : !g.memberIds.includes(account.id))),
   );
   const manage = (g: StudyGroup) => admin || g.leaderId === account.id;
+  const pendingFor = (g: StudyGroup) =>
+    requests.filter((r) => r.groupId === g.id && r.status === 'PENDING').length;
+  const leaderPending = groups
+    .filter((g) => g.status === 'ACTIVE' && g.leaderId === account.id)
+    .reduce((total, g) => total + pendingFor(g), 0);
+  const notice = (count: number) =>
+    count > 0 && (
+      <span
+        className="notice-count"
+        aria-label={`${count} pending join request${count === 1 ? '' : 's'}`}
+      >
+        {count}
+      </span>
+    );
   if (editor)
     return (
       <GroupEditor
@@ -102,7 +116,7 @@ export function GroupsPanel({
       {action.feedback}
       <div className="group-toolbar">
         <div className="tabs" role="tablist" aria-label="Group categories">
-          {['Discover', 'My groups', 'I lead', 'Closed'].map((v) => (
+          {['Discover', 'My groups', 'Groups I lead', 'Closed'].map((v) => (
             <button
               role="tab"
               aria-selected={scope === v}
@@ -114,6 +128,7 @@ export function GroupsPanel({
               }}
             >
               {v}
+              {v === 'Groups I lead' && notice(leaderPending)}
             </button>
           ))}
         </div>
@@ -175,6 +190,9 @@ export function GroupsPanel({
                     }}
                   >
                     {manage(g) ? 'Manage group' : 'View members'}
+                    {manage(g) &&
+                      g.status === 'ACTIVE' &&
+                      notice(pendingFor(g))}
                   </button>
                   {!admin && !member && g.status === 'ACTIVE' && (
                     <button

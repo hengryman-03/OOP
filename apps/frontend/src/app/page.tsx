@@ -228,6 +228,15 @@ function Workspace({
     data?.requests.filter(
       (r) => r.receiverId === account.id && r.status === 'PENDING',
     ).length ?? 0;
+  const ledGroupIds = new Set(
+    data?.groups
+      .filter((g) => g.status === 'ACTIVE' && g.leaderId === account.id)
+      .map((g) => g.id),
+  );
+  const groupPending =
+    data?.memberships.filter(
+      (r) => ledGroupIds.has(r.groupId) && r.status === 'PENDING',
+    ).length ?? 0;
   const displayName = data?.profile?.name ?? account.name;
   return (
     <div className="app-shell">
@@ -247,6 +256,9 @@ function Workspace({
               <span aria-hidden="true">{symbols[t]}</span>
               {t}
               {t === 'Connections' && pending > 0 && <b>{pending}</b>}
+              {t === 'Study groups' && groupPending > 0 && (
+                <b className="request-count">{groupPending}</b>
+              )}
             </button>
           ))}
         </nav>
