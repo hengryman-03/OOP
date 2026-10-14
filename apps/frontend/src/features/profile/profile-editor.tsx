@@ -219,20 +219,20 @@ export function ProfileEditor({
               ))}
             </select>
           </Field>
-          <Field label="Preferred group size (including you)">
-            <input
-              required
-              type="number"
-              min={2}
-              max={
-                form.preference.preferredArrangement === 'ONE_TO_ONE' ? 2 : 20
-              }
-              value={form.preference.preferredGroupSize}
-              onChange={(e) =>
-                preference({ preferredGroupSize: Number(e.target.value) })
-              }
-            />
-          </Field>
+          {form.preference.preferredArrangement !== 'ONE_TO_ONE' && (
+            <Field label="Preferred group size (including you)">
+              <input
+                required
+                type="number"
+                min={2}
+                max={20}
+                value={form.preference.preferredGroupSize}
+                onChange={(e) =>
+                  preference({ preferredGroupSize: Number(e.target.value) })
+                }
+              />
+            </Field>
+          )}
         </div>
         <AvailabilityEditor
           value={form.preference.availability}

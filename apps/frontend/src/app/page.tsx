@@ -9,51 +9,52 @@ import {
   Course,
   MatchingConfig,
   MembershipRequest,
+  Room,
   StudentProfile,
   StudyGroup,
+  StudySession,
 } from '@/lib/study-buddy-types';
-import { Avatar, Badge, Empty, Field } from '@/components/ui';
+import { Avatar, Badge, Empty } from '@/components/ui';
 import { ProfileEditor } from '@/features/profile/profile-editor';
 import { MatchExplorer } from '@/features/matching/match-explorer';
 import { ConnectionsPanel } from '@/features/connections/connections-panel';
 import { GroupsPanel } from '@/features/groups/groups-panel';
+import { VenuesPanel } from '@/features/venues/venues-panel';
 import { AdminPanel } from '@/features/admin/admin-panel';
+import { AuthPanel } from '@/features/auth/auth-panel';
+import { getFirebaseAuth, firebaseConfigured } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
 
 type Tab =
   | 'Find buddies'
   | 'Connections'
   | 'Study groups'
+  | 'Venues'
   | 'My profile'
   | 'Administration';
 const symbols: Record<Tab, string> = {
   'Find buddies': '⌕',
   Connections: '↔',
   'Study groups': '◉',
+  Venues: '⌂',
   'My profile': '▤',
   Administration: '⚙',
 };
 
 export default function Home() {
   const [account, setAccount] = useState<Account | null>(null),
-    [choices, setChoices] = useState<Account[]>([]),
     [ready, setReady] = useState(false),
-    [switching, setSwitching] = useState(false),
-    [error, setError] = useState(''),
-    [selection, setSelection] = useState('S001');
+    [error, setError] = useState('');
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      api<Account[]>('/session/accounts'),
-      api<Account>('/session').catch((e) => {
+    // Restore an existing server session (e.g. after a page refresh); 401 just means logged out.
+    api<Account>('/session')
+      .catch((e) => {
         if (e instanceof ApiError && e.status === 401) return null;
         throw e;
-      }),
-    ])
-      .then(([options, current]) => {
-        if (!cancelled) {
-          setChoices(options);
-          setAccount(current);
-        }
+      })
+      .then((current) => {
+        if (!cancelled) setAccount(current);
       })
       .catch((e) => {
         if (!cancelled) setError(e.message);
@@ -65,37 +66,13 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
-  async function switchAccount(id: string) {
-    setSwitching(true);
-    setAccount(null);
-    setError('');
-    try {
-      const current = await api<Account>('/session', 'POST', { accountId: id });
-      setAccount(current);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not select account.');
-    } finally {
-      setSwitching(false);
-    }
-  }
-  async function refreshChoices() {
-    try {
-      setChoices(await api<Account[]>('/session/accounts'));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not refresh accounts.');
-    }
-  }
-  if (!ready || switching)
+  if (!ready)
     return (
       <main className="welcome">
         <div className="brand">
           <span className="brand-mark">sb.</span> studybuddy
         </div>
-        <p role="status">
-          {switching
-            ? 'Switching your study space…'
-            : 'Opening your study space…'}
-        </p>
+        <p role="status">Opening your study space…</p>
       </main>
     );
   if (!account)
@@ -112,36 +89,10 @@ export default function Home() {
             starts with a connection.
           </h1>
           <p>
-            Find compatible study buddies, share your goals, and make room for
-            learning together.
+            Log in or create an account to find compatible study buddies, share
+            your goals, and make room for learning together.
           </p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void switchAccount(selection);
-            }}
-          >
-            <Field label="Choose a demo account">
-              <select
-                value={selection}
-                onChange={(e) => setSelection(e.target.value)}
-              >
-                {choices.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} · {a.id}
-                    {a.role === 'SYSTEM_ADMINISTRATOR' ? ' · Admin' : ''}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <button className="button wide" disabled={!choices.length}>
-              Enter study space →
-            </button>
-          </form>
-          <p className="demo-note">
-            <strong>Coursework demo</strong> · This account switcher does not
-            use passwords. Seeded profiles are fictional.
-          </p>
+          <AuthPanel onAuthed={setAccount} />
           {error && (
             <div role="alert" className="notice error">
               {error}
@@ -160,12 +111,11 @@ export default function Home() {
     <Workspace
       key={account.id}
       account={account}
-      choices={choices}
-      switchAccount={switchAccount}
-      refreshChoices={refreshChoices}
       logout={async () => {
         try {
           await api('/session', 'DELETE');
+          if (firebaseConfigured)
+            await signOut(getFirebaseAuth()).catch(() => undefined);
           setAccount(null);
         } catch (e) {
           setError(e instanceof Error ? e.message : 'Could not sign out.');
@@ -185,20 +135,16 @@ interface WorkspaceData {
   profile: StudentProfile | null;
   accounts: AccountUsage[];
   config: MatchingConfig | null;
+  sessions: StudySession[];
+  rooms: Room[];
 }
 /** Owns navigation and data loading; each domain screen owns only its form/workflow state. */
 function Workspace({
   account,
-  choices,
-  switchAccount,
-  refreshChoices,
   logout,
   globalError,
 }: {
   account: Account;
-  choices: Account[];
-  switchAccount: (id: string) => Promise<void>;
-  refreshChoices: () => Promise<void>;
   logout: () => Promise<void>;
   globalError: string;
 }) {
@@ -229,6 +175,8 @@ function Workspace({
       admin
         ? api<MatchingConfig>('/admin/matching-config')
         : Promise.resolve(null),
+      admin ? Promise.resolve([]) : api<StudySession[]>('/sessions/mine'),
+      admin ? Promise.resolve([]) : api<Room[]>('/venues/rooms'),
     ])
       .then(
         ([
@@ -240,6 +188,8 @@ function Workspace({
           profile,
           accounts,
           config,
+          sessions,
+          rooms,
         ]) => {
           if (!cancelled) {
             setData({
@@ -251,6 +201,8 @@ function Workspace({
               profile,
               accounts,
               config,
+              sessions,
+              rooms,
             });
             setError('');
           }
@@ -268,14 +220,22 @@ function Workspace({
   }, [account.id, admin, revision]);
   const refresh = () => {
     setRevision((v) => v + 1);
-    void refreshChoices();
   };
   const tabs: Tab[] = admin
     ? ['Administration', 'Study groups']
-    : ['Find buddies', 'Connections', 'Study groups', 'My profile'];
+    : ['Find buddies', 'Connections', 'Study groups', 'Venues', 'My profile'];
   const pending =
     data?.requests.filter(
       (r) => r.receiverId === account.id && r.status === 'PENDING',
+    ).length ?? 0;
+  const ledGroupIds = new Set(
+    data?.groups
+      .filter((g) => g.status === 'ACTIVE' && g.leaderId === account.id)
+      .map((g) => g.id),
+  );
+  const groupPending =
+    data?.memberships.filter(
+      (r) => ledGroupIds.has(r.groupId) && r.status === 'PENDING',
     ).length ?? 0;
   const displayName = data?.profile?.name ?? account.name;
   return (
@@ -296,6 +256,9 @@ function Workspace({
               <span aria-hidden="true">{symbols[t]}</span>
               {t}
               {t === 'Connections' && pending > 0 && <b>{pending}</b>}
+              {t === 'Study groups' && groupPending > 0 && (
+                <b className="request-count">{groupPending}</b>
+              )}
             </button>
           ))}
         </nav>
@@ -320,22 +283,14 @@ function Workspace({
           </div>
           <div className="account-control">
             <Avatar name={displayName} />
-            <Field label="Demo account">
-              <select
-                aria-label="Switch demo account"
-                value={account.id}
-                onChange={(e) => void switchAccount(e.target.value)}
-              >
-                {choices.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} · {a.id}
-                    {a.role === 'SYSTEM_ADMINISTRATOR' ? ' · Admin' : ''}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <div className="account-identity">
+              <strong>{displayName}</strong>
+              <span>
+                {account.role === 'SYSTEM_ADMINISTRATOR' ? 'Administrator' : 'Student'}
+              </span>
+            </div>
             <button className="button ghost" onClick={() => void logout()}>
-              Exit
+              Log out
             </button>
           </div>
         </header>
@@ -411,6 +366,16 @@ function Workspace({
                       students={data.students}
                       groups={data.groups}
                       requests={data.memberships}
+                      sessions={data.sessions}
+                      rooms={data.rooms}
+                      refresh={refresh}
+                    />
+                  )}
+                  {tab === 'Venues' && (
+                    <VenuesPanel
+                      groups={data.groups}
+                      sessions={data.sessions}
+                      rooms={data.rooms}
                       refresh={refresh}
                     />
                   )}

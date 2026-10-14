@@ -89,3 +89,5 @@ playwright-report/
 test-results/
 .env
 .env.local
+apps/backend/src/main/resources/*Firebase Service Account*.json
+

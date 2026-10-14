@@ -72,6 +72,38 @@ public class AdminService {
         return id.equals(r.getSenderId()) || id.equals(r.getReceiverId());
     }
 
+    public record BuddySummary(String id, String name) {}
+
+    public record AccountDetail(List<BuddySummary> buddies, List<StudyGroup> groups) {}
+
+    /** Names of active buddies and the active groups a student belongs to*/
+    public AccountDetail accountDetail(String id, Actor actor) {
+        actor.requireAdmin();
+        repository
+                .find(UserAccount.class, id)
+                .orElseThrow(() -> DomainException.missing("Account not found."));
+        List<BuddySummary> buddies =
+                repository.all(BuddyRequest.class).stream()
+                        .filter(r -> r.getStatus() == RequestStatus.ACCEPTED && involved(r, id))
+                        .map(r -> r.getSenderId().equals(id) ? r.getReceiverId() : r.getSenderId())
+                        .distinct()
+                        .map(
+                                otherId ->
+                                        repository
+                                                .find(UserAccount.class, otherId)
+                                                .map(a -> new BuddySummary(a.getId(), a.getName()))
+                                                .orElse(new BuddySummary(otherId, "Deleted account")))
+                        .toList();
+        List<StudyGroup> groups =
+                repository.all(StudyGroup.class).stream()
+                        .filter(
+                                g ->
+                                        g.getStatus() == GroupStatus.ACTIVE
+                                                && g.getMemberIds().contains(id))
+                        .toList();
+        return new AccountDetail(buddies, groups);
+    }
+
     @Transactional
     public UserAccount saveAccount(UserAccount input, Actor actor) {
         repository.lock();

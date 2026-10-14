@@ -799,6 +799,29 @@ fieldset .help {
   font-size: 10px;
   color: #929d84;
 }
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+.room-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.room-card .section-heading {
+  margin-bottom: 0;
+}
+.booking-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
 .leader-line {
   display: flex;
   align-items: center;
@@ -1073,6 +1096,7 @@ td .button {
   }
   .match-grid,
   .group-grid,
+  .room-grid,
   .form-grid,
   .filter-grid {
     grid-template-columns: 1fr;
@@ -1172,4 +1196,184 @@ td small {
 }
 .public-profile {
   scroll-margin-top: 24px;
+}
+
+/* Login / register form on the welcome screen. */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+  text-align: left;
+}
+.auth-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: rgba(59, 84, 72, 0.06);
+  border-radius: 10px;
+}
+.auth-tabs button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+}
+.auth-tabs button.selected {
+  background: #fff;
+  color: #3b5448;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.account-identity {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.account-identity strong {
+  font-size: 13px;
+  color: #3b5448;
+  font-weight: 500;
+}
+.account-identity span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+/* Administrator sign-in heading + the toggle link between student/admin login. */
+.auth-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.auth-heading strong {
+  font-size: 15px;
+  color: #3b5448;
+  font-weight: 600;
+}
+.auth-heading span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.auth-switch {
+  border: 0;
+  background: transparent;
+  color: #68765e;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+  align-self: center;
+  text-decoration: underline;
+}
+.auth-switch:hover {
+  color: #3b5448;
+}
+.link-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--green);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link-button:hover {
+  color: #194b38;
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(32, 61, 54, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+.modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.modal-header .button {
+  min-height: 30px;
+  padding: 6px 10px;
+}
+.modal-section {
+  margin-bottom: 20px;
+}
+.modal-section:last-child {
+  margin-bottom: 0;
+}
+.modal-section h4 {
+  font-size: 12px;
+  font-weight: 650;
+  color: #536759;
+  margin-bottom: 10px;
+}
+.modal-list {
+  display: grid;
+  gap: 8px;
+}
+.modal-list-item {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.modal-list-item strong {
+  display: block;
+  font-size: 12px;
+}
+.modal-list-item small {
+  display: block;
+  color: #94a087;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+/* Pending join requests waiting on a group leader. */
+.notice-count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  border-radius: 9px;
+  padding: 1px 6px;
+  background: #b4572d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  vertical-align: 1px;
+}
+nav b.request-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  padding: 0 6px;
+  background: #b4572d;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }

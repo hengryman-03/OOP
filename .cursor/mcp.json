@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "datamate": {
+      "type": "stdio",
+      "command": "/Applications/Cursor.app/Contents/Frameworks/Cursor Helper (Plugin).app/Contents/MacOS/Cursor Helper (Plugin)",
+      "args": [
+        "/Users/gwn/.cursor/extensions/altimateai.vscode-altimate-mcp-server-0.9.1-darwin-arm64/dist/datamate-cli.js",
+        "start-stdio"
+      ],
+      "env": {
+        "ALTIMATE_EXTENSION_RPC": "/var/folders/st/gcqt0ls56kvdd87rv6v_jvjw0000gn/T/altimate-mcp-61538.sock",
+        "ELECTRON_RUN_AS_NODE": "1"
+      },
+      "updatedAt": "2026-09-13T10:13:25.249Z"
+    }
+  }
+}

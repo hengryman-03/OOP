@@ -43,6 +43,11 @@ public class AdminController {
         return Map.of("success", true);
     }
 
+    @GetMapping("/accounts/{id}/detail")
+    public AdminService.AccountDetail accountDetail(@PathVariable String id, HttpSession s) {
+        return admin.accountDetail(id, sessions.actor(s));
+    }
+
     @GetMapping("/matching-config")
     public MatchingProperties config(HttpSession s) {
         sessions.actor(s).requireAdmin();

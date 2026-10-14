@@ -145,6 +145,41 @@ export function AvailabilityEditor({
     </fieldset>
   );
 }
+/** A dismissible popup: click outside, or the close button, to dismiss. */
+export function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">
+          <h3>{title}</h3>
+          <button
+            type="button"
+            className="button ghost"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  );
+}
 /** Every mutation uses the same pending/error feedback and only refreshes after success. */
 export function useAction(onSuccess?: () => void) {
   const [busy, setBusy] = useState(false),

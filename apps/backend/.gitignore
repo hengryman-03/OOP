@@ -34,3 +34,5 @@ build/
 
 ### Secrets ###
 .env
+src/main/resources/serviceAccountKey.json
+src/main/resources/StudyBuddy Firebase Service Account.json
