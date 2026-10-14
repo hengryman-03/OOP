@@ -15,7 +15,7 @@
     <description>Spring Boot backend for an OOP Study Buddy Matcher System</description>
 
     <properties>
-        <java.version>17</java.version>
+        <java.version>25</java.version>
     </properties>
 
     <dependencies>
