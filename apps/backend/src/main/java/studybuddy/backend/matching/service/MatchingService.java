@@ -62,8 +62,9 @@ public class MatchingService {
                 courseCode == null || courseCode.isBlank()
                         ? source.getPreference().getCourseCode()
                         : courseCode;
-        int[] weights = effectiveWeights(getCurrentConfig());
-        return students.findAll().stream()
+        MatchingProperties config = getCurrentConfig();
+        int[] weights = effectiveWeights(config);
+        List<MatchRanker.Candidate> candidates = students.findAll().stream()
                 .filter(s -> !s.getId().equals(studentId))
                 .filter(
                         s ->
@@ -107,16 +108,19 @@ public class MatchingService {
                                                                                                         start,
                                                                                                         end)))))
                 .map(
-                        s ->
-                                new MatchResult(
-                                        s.toPublicProfile(false),
-                                        score(source, s, targetCourse, weights)))
-                .sorted(
-                        Comparator.comparingInt(MatchResult::getScore)
-                                .reversed()
-                                .thenComparing(m -> m.getStudent().getId()))
-                .limit(getCurrentConfig().getMaxResults())
+                        s -> {
+                            int sharedMinutes =
+                                    AvailabilityCalculator.overlap(
+                                            source.getPreference().getAvailability(),
+                                            s.getPreference().getAvailability());
+                            double[] factors = factors(source, s, targetCourse, sharedMinutes);
+                            return new MatchRanker.Candidate(
+                                    new MatchResult(s.toPublicProfile(false), breakdown(factors, weights)),
+                                    factors,
+                                    sharedMinutes);
+                        })
                 .toList();
+        return MatchRanker.rank(candidates, config);
     }
 
     private <T> boolean compatible(T a, T b, T either) {
@@ -125,14 +129,25 @@ public class MatchingService {
 
     public MatchBreakdown score(
             StudentProfile source, StudentProfile candidate, String targetCourse, int[] weights) {
+        int sharedMinutes =
+                AvailabilityCalculator.overlap(
+                        source.getPreference().getAvailability(),
+                        candidate.getPreference().getAvailability());
+        return breakdown(factors(source, candidate, targetCourse, sharedMinutes), weights);
+    }
+
+    private double[] factors(
+            StudentProfile source,
+            StudentProfile candidate,
+            String targetCourse,
+            int sharedMinutes) {
         StudyPreference a = source.getPreference(), b = candidate.getPreference();
         double course =
                 targetCourse.equals(b.getCourseCode())
                         ? 1
                         : candidate.getCurrentCourses().contains(targetCourse) ? 0.5 : 0;
-        int overlap = AvailabilityCalculator.overlap(a.getAvailability(), b.getAvailability());
         double availability =
-                (double) overlap
+                (double) sharedMinutes
                         / Math.max(
                                 1,
                                 AvailabilityCalculator.minutes(a.getAvailability()).cardinality());
@@ -147,14 +162,22 @@ public class MatchingService {
                                                 a.getPreferredGroupSize()
                                                         - b.getPreferredGroupSize()))
                         : 0;
+        return new double[] {
+            course,
+            availability,
+            compatible(a.getPreferredMode(), b.getPreferredMode(), StudyMode.EITHER) ? 1 : 0,
+            a.getStudyGoal() == b.getStudyGoal() ? 1 : 0,
+            size
+        };
+    }
+
+    private MatchBreakdown breakdown(double[] factors, int[] weights) {
         return new MatchBreakdown(
-                (int) Math.round(weights[0] * course),
-                (int) Math.round(weights[1] * availability),
-                compatible(a.getPreferredMode(), b.getPreferredMode(), StudyMode.EITHER)
-                        ? weights[2]
-                        : 0,
-                a.getStudyGoal() == b.getStudyGoal() ? weights[3] : 0,
-                (int) Math.round(weights[4] * size));
+                (int) Math.round(weights[0] * factors[0]),
+                (int) Math.round(weights[1] * factors[1]),
+                (int) Math.round(weights[2] * factors[2]),
+                (int) Math.round(weights[3] * factors[3]),
+                (int) Math.round(weights[4] * factors[4]));
     }
 
     private int[] rawWeights(MatchingProperties c) {
@@ -167,14 +190,9 @@ public class MatchingService {
         };
     }
 
-    /**
-     * Strategies multiply one criterion by three; largest remainders keep the score ceiling exactly
-     * 100.
-     */
+    /** Largest remainders keep the displayed compatibility score ceiling exactly 100. */
     public int[] effectiveWeights(MatchingProperties config) {
         int[] raw = rawWeights(config);
-        if ("COURSE_FIRST".equals(config.getStrategy())) raw[0] *= 3;
-        if ("AVAILABILITY_FIRST".equals(config.getStrategy())) raw[1] *= 3;
         double sum = Arrays.stream(raw).sum();
         if (sum <= 0)
             throw new IllegalArgumentException("At least one matching weight must be positive.");

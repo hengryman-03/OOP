@@ -114,7 +114,12 @@ export function AdminPanel({
                   }))
                 }
               >
-                {['BALANCED', 'AVAILABILITY_FIRST', 'COURSE_FIRST'].map((s) => (
+                {[
+                  'BALANCED',
+                  'AVAILABILITY_FIRST',
+                  'COURSE_FIRST',
+                  'PARETO',
+                ].map((s) => (
                   <option key={s} value={s}>
                     {label(s)}
                   </option>
@@ -156,10 +161,12 @@ export function AdminPanel({
             ))}
           </div>
           <p className="help">
-            Balanced uses your weights directly. Availability-first triples the
-            availability weight; course-first triples the course weight.
-            Effective weights are normalized to 100 points. At least one
-            criterion must be enabled.
+            Balanced ranks by weighted score. Availability-first ranks by shared
+            minutes, then score. Course-first ranks preferred-course matches
+            before enrolled peers, then score. Pareto ranks non-dominated
+            trade-offs first, then score. Weights determine the 100-point score
+            and which criteria Pareto considers. A zero weight also disables
+            that criterion as a strict priority.
           </p>
           <div className="form-footer">
             <span>
@@ -175,34 +182,24 @@ export function AdminPanel({
         <div className="section-heading">
           <div>
             <h2>User accounts</h2>
-            <p>Create accounts, maintain status, and review basic activity.</p>
+            <p>
+              Students create accounts through registration. Review activity and
+              manage the name or status of existing accounts here.
+            </p>
           </div>
-          <button
-            className="button"
-            onClick={() =>
-              setDraft({ name: '', role: 'STUDENT', status: 'ACTIVE' })
-            }
-          >
-            + Create account
-          </button>
         </div>
         {draft && (
           <form
             className="account-form"
             onSubmit={(e) => {
               e.preventDefault();
-              void action.run(
-                async () => {
-                  await api('/admin/accounts', 'POST', draft);
-                  setDraft(null);
-                },
-                draft.id
-                  ? 'Account updated.'
-                  : 'Account created. Select it in demo mode to complete its profile.',
-              );
+              void action.run(async () => {
+                await api('/admin/accounts', 'POST', draft);
+                setDraft(null);
+              }, 'Account updated.');
             }}
           >
-            <h3>{draft.id ? 'Edit account' : 'New account'}</h3>
+            <h3>Edit account</h3>
             <div className="form-grid">
               <Field label="Account name">
                 <input
@@ -213,21 +210,7 @@ export function AdminPanel({
                 />
               </Field>
               <Field label="Role">
-                <select
-                  disabled={!!draft.id}
-                  value={draft.role}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      role: e.target.value as Account['role'],
-                    })
-                  }
-                >
-                  <option value="STUDENT">Student</option>
-                  <option value="SYSTEM_ADMINISTRATOR">
-                    System administrator
-                  </option>
-                </select>
+                <input readOnly value={label(draft.role ?? '')} />
               </Field>
               <Field label="Status">
                 <select
@@ -273,7 +256,7 @@ export function AdminPanel({
                 <th>Account</th>
                 <th>Status</th>
                 <th>Usage</th>
-                <th>Last active</th>
+                <th>Last sign-in</th>
                 <th>Actions</th>
               </tr>
             </thead>

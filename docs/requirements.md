@@ -2,12 +2,14 @@
 
 This map interprets the supplied PDF's functional requirements and the Word checklist as application scope. Submission and peer-evaluation instructions are not application features. The Word document's leader-exit rule is included as the team-added requirement.
 
+A live Firebase browser walkthrough was completed on 17 October 2026 using two disposable student identities and an isolated H2 database. It covered sign-in, profile setup, matching, buddy and group workflows and the administrator strategy change. See `verification.md` for exact limits. Earlier browser observations there predate Firebase Authentication.
+
 | Requirement | Implementation | Verification |
 | --- | --- | --- |
 | Create/update basic profile and courses | `StudentController`, `StudentService`, `ProfileEditor` | API validation/ownership test; browser onboarding |
 | Course, mode, arrangement, goal, size, weekly availability | Validated `StudyPreference`, shared availability editor | Nested validation and saved-profile tests |
 | Search by course or study goal | Match explorer filters and `MatchingService` | Combined filter test |
-| Ranked compatible students | Normalized scoring and stable descending score order | Strategy/scoring test; browser match cards |
+| Ranked compatible students | Normalized scoring with deterministic balanced, priority and Pareto ranking | Ranking tests, API strategy test and live Firebase browser match explanations |
 | Filter course, goal, mode, availability | Filters plus arrangement and overlap-only | Positive/empty/invalid filter tests |
 | Public profile with private contact | Server-side public projection | Privacy test across multiple sessions |
 | Request with optional message | `ConnectionService.sendRequest`, selected profile form | Duplicate/self/forgery tests; browser send |
@@ -21,13 +23,13 @@ This map interprets the supplied PDF's functional requirements and the Word chec
 | Leader transfers or closes before quitting | Transfer-and-stay, transfer-and-leave, close-and-leave | Blocked exit/self-transfer/outsider tests; browser transfer |
 | Lone leader exits | Automatic closure and leader membership removal | Leader exit test |
 | Admin override | Admin group controls | Override/leadership protection test |
-| Create/update/delete user accounts | Account form, usage table, transactional cleanup | API lifecycle test; browser create |
-| Account status/basic usage | Status, profile completeness, connections/groups/pending counts, last login | Admin account response tests and browser table |
+| Create/update/delete user accounts | Students create login accounts through Firebase registration. Admin can update/delete existing accounts; admin creation is **not covered** under this self-registration policy. | API lifecycle test; live admin account table viewed after Firebase merge |
+| Account status/basic usage | Status, profile completeness, connections/groups/pending counts, last sign-in | Admin account response tests; live browser table showed sign-in timestamps |
 | Configure matching criteria and importance | Nonnegative weights, zero disables, nonzero total | Validation and persistence tests |
-| Configure strategy | Balanced, availability-first, course-first | Scores change and saved config tests |
-| At least 10 courses and 50 profiles | Atomic one-time fictional seeds | Seed-count test and real-HTTP smoke |
+| Configure strategy | Balanced, availability-first, course-first and Pareto fronts | Ranking, API strategy and saved-config tests |
+| At least 10 courses and 50 profiles | Atomic one-time fictional seeds | Seed-count test; optional real-HTTP smoke requires Firebase Admin credentials |
 | Modular OOP and layered design | Existing package/model structure retained; focused services/helpers | Architecture and class diagrams |
 | Externalized parameters | Properties, environment variables, saved matching config | Configuration documentation and restart smoke |
-| README/setup/assumptions/demo accounts | Project README and demo guide | Documented commands exercised during verification |
+| README/setup/assumptions/authentication | Project README and demo guide | Build and test commands exercised; live Firebase login and recovery checked on 17 October 2026 |
 
-Scope choices preserve the template: one primary study goal and one matching preference per profile/group; multiple weekly time slots; group size includes the leader. There is no separate password requirement in the brief; the explicit demo selector is one of the starter README's accepted implementation options. The application does not invent personal contribution records or claim the team has rehearsed a presentation.
+Scope choices preserve the template: one primary study goal and one matching preference per profile/group; multiple weekly time slots; group size includes the leader. Students now authenticate with Firebase, while the system administrator uses a separate configured password. Seeded fictional student records have no Firebase identities and cannot sign in. Historical browser evidence in `verification.md` predates this change. The application does not invent personal contribution records or claim the team has rehearsed a presentation.

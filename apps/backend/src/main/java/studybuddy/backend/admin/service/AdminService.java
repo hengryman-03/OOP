@@ -12,7 +12,6 @@ import studybuddy.backend.persistence.StudyRepository;
 import studybuddy.backend.student.model.StudentProfile;
 
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class AdminService {
@@ -114,13 +113,13 @@ public class AdminService {
                         : repository
                                 .find(UserAccount.class, input.getId())
                                 .orElseThrow(() -> DomainException.missing("Account not found."));
-        if (current == null)
-            input.setId(("STUDENT".equals(input.getRole()) ? "S-" : "ADMIN-") + UUID.randomUUID());
-        else {
+        if (current == null) {
+            throw new IllegalArgumentException(
+                    "Students must self-register before administrators can manage their accounts.");
+        } else {
             if (!current.getRole().equals(input.getRole()))
                 throw new IllegalArgumentException(
-                        "Account roles cannot be changed; create an account for the required"
-                            + " role.");
+                        "Account roles cannot be changed. Students self-register and the system administrator is configured separately.");
             if (actor.id().equals(current.getId()) && !"ACTIVE".equals(input.getStatus()))
                 throw DomainException.conflict(
                         "You cannot suspend your own administrator account.");
