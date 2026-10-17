@@ -1,6 +1,8 @@
 package studybuddy.backend;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -8,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -16,9 +19,12 @@ import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.matching.config.MatchingProperties;
+import studybuddy.backend.auth.FirebaseConfig;
+import studybuddy.backend.common.DomainException;
 import studybuddy.backend.matching.service.AvailabilityCalculator;
 import studybuddy.backend.matching.service.MatchingService;
 import studybuddy.backend.persistence.StudyRepository;
@@ -29,7 +35,7 @@ import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.List;
 
-/** HTTP integration tests use separate sessions and real H2 transactions, not mocked services. */
+/** HTTP integration tests use real H2 and sessions; only external Firebase token verification is stubbed. */
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:studybuddy-tests;DB_CLOSE_DELAY=-1")
 @AutoConfigureMockMvc
 @Transactional
@@ -38,14 +44,26 @@ class StudyBuddyIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired StudyRepository repository;
     @Autowired MatchingService matching;
+    @MockitoBean FirebaseConfig firebaseConfig;
+
+    @BeforeEach
+    void stubVerifiedFirebaseUid() {
+        when(firebaseConfig.verifiedUid(anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
 
     MockHttpSession login(String id) throws Exception {
+        boolean admin = "ADMIN001".equals(id);
         MvcResult result =
                 mvc.perform(
-                                post("/api/session")
+                                post(admin ? "/api/session/admin-login" : "/api/session/login")
                                         .header("X-StudyBuddy-Request", "1")
                                         .contentType("application/json")
-                                        .content("{\"accountId\":\"" + id + "\"}"))
+                                        .content(
+                                                admin
+                                                        ? "{\"username\":\"admin\",\"password\":\"admin123\"}"
+                                                        : json.writeValueAsString(
+                                                                java.util.Map.of("idToken", id))))
                         .andExpect(status().isOk())
                         .andReturn();
         return (MockHttpSession) result.getRequest().getSession();
@@ -102,18 +120,61 @@ class StudyBuddyIntegrationTest {
     void seedsAndSessionBoundaries() throws Exception {
         mvc.perform(get("/api/students")).andExpect(status().isUnauthorized());
         mvc.perform(
-                        post("/api/session")
+                        post("/api/session/login")
                                 .contentType("application/json")
-                                .content("{\"accountId\":\"S001\"}"))
+                                .content("{\"idToken\":\"S001\"}"))
+                .andExpect(status().isForbidden());
+        when(firebaseConfig.verifiedUid("invalid"))
+                .thenThrow(DomainException.forbidden("Invalid or expired Firebase token."));
+        mvc.perform(
+                        post("/api/session/login")
+                                .header("X-StudyBuddy-Request", "1")
+                                .contentType("application/json")
+                                .content("{\"idToken\":\"invalid\"}"))
                 .andExpect(status().isForbidden());
         var student = login("S001");
+        assertFalse(call(student, get("/api/session"), 200).get("lastActiveAt").isNull());
         assertEquals(50, call(student, get("/api/students"), 200).size());
         assertEquals(10, call(student, get("/api/students/courses"), 200).size());
         call(student, get("/api/admin/accounts"), 403);
         call(student, get("/api/admin/matching-config"), 403);
         call(student, get("/api/connections/students/S002"), 403);
         call(student, get("/api/students/S002/matches"), 403);
-        assertEquals(51, call(login("ADMIN001"), get("/api/admin/accounts"), 200).size());
+        var admin = login("ADMIN001");
+        assertFalse(call(admin, get("/api/session"), 200).get("lastActiveAt").isNull());
+        assertEquals(51, call(admin, get("/api/admin/accounts"), 200).size());
+    }
+
+    @Test
+    void firebaseSignupUsesVerifiedUidAndCreatesAnIndependentSession() throws Exception {
+        when(firebaseConfig.verifiedUid("signed-token")).thenReturn("firebase-uid-001");
+        MvcResult signup =
+                mvc.perform(
+                                post("/api/session/signup")
+                                        .header("X-StudyBuddy-Request", "1")
+                                        .contentType("application/json")
+                                        .content("{\"idToken\":\"signed-token\",\"name\":\"New learner\"}"))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode account = json.readTree(signup.getResponse().getContentAsString());
+        assertEquals("firebase-uid-001", account.get("id").asText());
+        assertEquals("STUDENT", account.get("role").asText());
+        assertFalse(account.get("lastActiveAt").isNull());
+        MockHttpSession session = (MockHttpSession) signup.getRequest().getSession();
+        assertEquals(
+                "firebase-uid-001",
+                call(session, get("/api/session"), 200).get("id").asText());
+        call(session, get("/api/students/firebase-uid-001"), 404);
+        call(
+                session,
+                post("/api/session/signup"),
+                java.util.Map.of("idToken", "signed-token", "name", "Duplicate"),
+                409);
+        assertEquals(
+                "firebase-uid-001",
+                call(session, post("/api/session/login"), java.util.Map.of("idToken", "signed-token"), 200)
+                        .get("id")
+                        .asText());
     }
 
     @Test
@@ -238,7 +299,9 @@ class StudyBuddyIntegrationTest {
         String before = call(student, get("/api/students/S001/matches"), 200).toString();
         config.put("strategy", "AVAILABILITY_FIRST");
         call(admin, put("/api/admin/matching-config"), config, 200);
-        assertNotEquals(before, call(student, get("/api/students/S001/matches"), 200).toString());
+        JsonNode availabilityResults = call(student, get("/api/students/S001/matches"), 200);
+        assertNotEquals(before, availabilityResults.toString());
+        assertTrue(availabilityResults.get(0).get("rankingReason").asText().contains("shared weekly minutes"));
         assertEquals(
                 "AVAILABILITY_FIRST",
                 repository.find(MatchingProperties.class, "current").orElseThrow().getStrategy());
@@ -248,6 +311,17 @@ class StudyBuddyIntegrationTest {
                 100,
                 java.util.Arrays.stream(matching.effectiveWeights(matching.getCurrentConfig()))
                         .sum());
+        config.put("strategy", "PARETO");
+        call(admin, put("/api/admin/matching-config"), config, 200);
+        assertTrue(
+                call(student, get("/api/students/S001/matches"), 200)
+                        .get(0)
+                        .get("rankingReason")
+                        .asText()
+                        .contains("Pareto front"));
+        config.put("strategy", "UNKNOWN");
+        call(admin, put("/api/admin/matching-config"), config, 400);
+        config.put("strategy", "PARETO");
         for (String key :
                 List.of(
                         "courseWeight",
@@ -374,17 +448,19 @@ class StudyBuddyIntegrationTest {
     }
 
     @Test
-    void accountCreationProfileSetupSuspensionReactivationAndDeletion() throws Exception {
+    void selfRegistrationProfileSetupSuspensionAndDeletion() throws Exception {
         var admin = login("ADMIN001");
-        JsonNode created =
-                call(
-                        admin,
-                        post("/api/admin/accounts"),
-                        java.util.Map.of(
-                                "name", "New learner", "role", "STUDENT", "status", "ACTIVE"),
-                        200);
+        MvcResult signup =
+                mvc.perform(
+                                post("/api/session/signup")
+                                        .header("X-StudyBuddy-Request", "1")
+                                        .contentType("application/json")
+                                        .content("{\"idToken\":\"firebase-uid-002\",\"name\":\"New learner\"}"))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode created = json.readTree(signup.getResponse().getContentAsString());
         String id = created.get("id").asText();
-        var student = login(id);
+        var student = (MockHttpSession) signup.getRequest().getSession();
         call(student, get("/api/students/" + id), 404);
         ObjectNode p = profile(login("S001"), "S001");
         p.put("id", id);
@@ -403,24 +479,112 @@ class StudyBuddyIntegrationTest {
         call(student, get("/api/students"), 401);
         assertTrue(repository.find(StudentProfile.class, id).isEmpty());
         assertEquals(0, call(login("S004"), get("/api/connections/students/S004"), 200).size());
+        JsonNode reRegistered =
+                call(
+                        admin,
+                        post("/api/session/signup"),
+                        java.util.Map.of("idToken", id, "name", "Returning learner"),
+                        200);
+        assertEquals(id, reRegistered.get("id").asText());
+        assertTrue(repository.find(StudentProfile.class, id).isEmpty());
+    }
+
+    @Test
+    void administratorsManageSelfRegisteredAccountsRatherThanCreatingUnusableRecords() throws Exception {
+        var admin = login("ADMIN001");
+        call(
+                admin,
+                post("/api/admin/accounts"),
+                java.util.Map.of(
+                        "name", "New learner", "role", "STUDENT", "status", "ACTIVE"),
+                400);
+        call(
+                admin,
+                post("/api/admin/accounts"),
+                java.util.Map.of(
+                        "name", "Extra admin", "role", "SYSTEM_ADMINISTRATOR", "status", "ACTIVE"),
+                400);
+    }
+
+    @Test
+    void venueBookingRespectsMembershipCapacityAndConflicts() throws Exception {
+        mvc.perform(get("/api/venues/rooms")).andExpect(status().isUnauthorized());
+        var leader = login("S001");
+        var anotherLeader = login("S002");
+        var outsider = login("S004");
+        String date =
+                java.time.LocalDate.now()
+                        .with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.MONDAY))
+                        .toString();
+        var plan =
+                java.util.Map.of(
+                        "groupId", "G001",
+                        "sessionDate", date,
+                        "startTime", "10:00",
+                        "endTime", "11:00",
+                        "maxGroupSize", 4);
+        String sessionId = call(leader, post("/api/sessions"), plan, 200).get("id").asText();
+        String recommendations = "/api/venues/recommendations?sessionId=" + sessionId;
+        call(outsider, get(recommendations), 403);
+        JsonNode rooms = call(leader, get(recommendations), 200);
+        assertTrue(rooms.size() > 0);
+        for (JsonNode room : rooms) assertTrue(room.get("capacity").asInt() >= 4);
+        String roomId = rooms.get(0).get("id").asText();
+        call(leader, post("/api/venues/bookings?sessionId=" + sessionId + "&roomId=" + roomId), 200);
+        assertEquals(
+                roomId,
+                call(leader, get("/api/sessions?groupId=G001"), 200)
+                        .get(0)
+                        .get("bookedRoomId")
+                        .asText());
+        for (JsonNode room : call(leader, get(recommendations), 200))
+            assertNotEquals(roomId, room.get("id").asText());
+
+        String competingSessionId =
+                call(
+                                anotherLeader,
+                                post("/api/sessions"),
+                                java.util.Map.of(
+                                        "groupId", "G002",
+                                        "sessionDate", date,
+                                        "startTime", "10:00",
+                                        "endTime", "11:00",
+                                        "maxGroupSize", 4),
+                                200)
+                        .get("id")
+                        .asText();
+        call(
+                anotherLeader,
+                post("/api/venues/bookings?sessionId=" + competingSessionId + "&roomId=" + roomId),
+                409);
+        call(leader, post("/api/venues/bookings/release?sessionId=" + sessionId), 200);
+        assertTrue(
+                call(leader, get("/api/sessions?groupId=G001"), 200)
+                        .get(0)
+                        .get("bookedRoomId")
+                        .isNull());
+        call(
+                anotherLeader,
+                post("/api/venues/bookings?sessionId=" + competingSessionId + "&roomId=" + roomId),
+                200);
     }
 
     @Test
     void corsAllowsLocalFrontendButRejectsOtherOrigins() throws Exception {
         mvc.perform(
-                        post("/api/session")
+                        post("/api/session/login")
                                 .header("Origin", "http://127.0.0.1:4200")
                                 .header("X-StudyBuddy-Request", "1")
                                 .contentType("application/json")
-                                .content("{\"accountId\":\"S001\"}"))
+                                .content("{\"idToken\":\"S001\"}"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://127.0.0.1:4200"));
         mvc.perform(
-                        post("/api/session")
+                        post("/api/session/login")
                                 .header("Origin", "https://untrusted.example")
                                 .header("X-StudyBuddy-Request", "1")
                                 .contentType("application/json")
-                                .content("{\"accountId\":\"S001\"}"))
+                                .content("{\"idToken\":\"S001\"}"))
                 .andExpect(status().isForbidden());
     }
 

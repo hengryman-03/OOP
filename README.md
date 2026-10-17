@@ -1,10 +1,12 @@
 # Study Buddy Matcher System
 
-A complete coursework application built on the supplied Nx monorepo template: a Java 17 Spring Boot backend, a Next.js/React frontend, and file-backed H2 persistence. Students can manage study preferences, find compatible buddies, exchange requests, and manage study groups. Administrators manage accounts and the matching engine.
+A coursework application built on the supplied Nx monorepo template: a Java 25 / Spring Boot 3.5 backend, a Next.js/React frontend, Firebase Authentication for students, and file-backed H2 persistence. Students can manage study preferences, find compatible buddies, exchange requests, and manage study groups. Administrators manage accounts and the matching engine.
 
 ## Run locally
 
-Requirements: Node.js 22 LTS with npm, and JDK 17 or 21. The Maven wrapper downloads Maven automatically. An internet connection is required for the first dependency install. The implementation was also verified on the available JDK 25, but the Java source targets 17.
+Requirements: Node.js 22 LTS with npm and JDK 25. The Maven wrapper downloads Maven automatically. An internet connection is required for the first dependency install.
+
+Student login needs a Firebase project with Email/Password sign-in enabled. Copy `apps/frontend/.env.example` to `apps/frontend/.env` and fill in its `NEXT_PUBLIC_FIREBASE_*` web-app values. Keep the Firebase Admin service-account JSON **outside the project directory** (including `apps/backend/src/main/resources`, which Maven packages into the app) and set `FIREBASE_SERVICE_ACCOUNT` to its plain absolute path before starting the backend. The public web config is not a service-account credential. The backend intentionally refuses to start when its private credential is missing; do not commit that JSON file. `FIREBASE_DATABASE_URL` has a project default and is used by the Firebase Admin initialisation, while application records remain in H2.
 
 From this project directory:
 
@@ -30,21 +32,11 @@ npm run dev --workspace=@study-buddy-matcher/frontend
 
 The standalone frontend uses **http://localhost:3000**. Both development entry points explicitly use Webpack, matching the verified production build and supporting workspace checkouts with linked dependencies. On Windows, use `mvnw.cmd` in place of `./mvnw` and run the applications separately. If a Unix checkout loses the wrapper executable bit, run `chmod +x apps/backend/mvnw`.
 
-### Demo accounts
+### Accounts and sample data
 
-The login screen and header provide an explicit **demo account switcher**. All seeded names and contact numbers are fictional.
+Students register or sign in with Firebase email and password. The backend verifies the Firebase ID token and then creates an HttpOnly server session. A newly registered student completes **My profile** before matching. If Firebase registration succeeds while the backend is unavailable, sign in later and use **Finish registration** to create the missing application account. The administrator uses the separate administrator sign-in, configured by `ADMIN_USERNAME` and `ADMIN_PASSWORD`; override the demo defaults before sharing the app.
 
-| Account | Role | Useful demonstration |
-| --- | --- | --- |
-| `S001` / Avery Tan | Student; leader of OOP study circle | Profile, matching, requests, group management |
-| `S002` / Jamie Tan | Student; leader of Programming practice | Accept a buddy request or request group membership |
-| `S011` / Avery Lim | Existing member of OOP study circle | Leadership transfer |
-| `S021` / Avery Lee | Student | High-ranked IS442 match for S001 under default settings |
-| `ADMIN001` | System administrator | Accounts, matching settings, group override |
-
-A newly created student account has no profile until that student completes **My profile**. Group leadership is a capability held by a student, not a separate account role.
-
-**This is a local demonstration login, not password authentication.** Anyone who can access the demo switcher can choose any active demo account. The backend binds to loopback by default. Roles and record ownership are checked against a server session on each request, not trusted from browser form IDs. Do not expose the demo on a public server or use real personal data. `DEMO_ENABLED=false` disables the account selector; it does not install an alternative login mechanism.
+The database seeds 50 fictional student profiles and 10 courses for matching demonstrations. Those seeded `S001`–`S050` records are **not** Firebase users, so they cannot be selected as login accounts. To demonstrate two-way requests or group decisions in the browser, register two Firebase users and complete their profiles. Login-capable students self-register; administrators manage existing accounts and cannot create new sign-in identities.
 
 ## Implemented features
 
@@ -53,12 +45,14 @@ A newly created student account has no profile until that student completes **My
 - Public profiles hide contacts. An accepted buddy request reveals contacts to both participants; ending it revokes contact access. Directory and matching responses always omit contacts.
 - Buddy requests with optional messages, inbox/sent/history views, accept/decline, active connections, and ending connections. Self-requests, duplicate/reverse pending requests, forged senders, and invalid status transitions are rejected.
 - Group creation/editing/closure, course discovery, membership requests and decisions, capacity enforcement, removal, ordinary member exit, leadership transfer, and the team-added leader exit rule.
-- Administrator account creation, name/status updates, deletion with related personal-record cleanup, profile-completion status, active-buddy counts, group counts, pending-request counts, and last demo login time.
+- Administrator name/status updates and deletion with related personal-record cleanup, profile-completion status, active-buddy counts, group counts, pending-request counts, and last sign-in time. New login-capable student accounts come from self-registration.
 - Administrator strategy/weight/result-limit configuration saved immediately to the database. A weight of zero disables that criterion.
-- Seed data installed once: 10 courses, 50 student profiles and student accounts, 1 administrator, and 3 study groups. Deleted seed accounts do not reappear at restart.
+- Seed data installed once: 10 courses, 50 fictional student profiles and student accounts, 1 administrator, and 3 study groups. Deleted seed accounts do not reappear at restart.
 - Responsive interface with validation, request-in-progress states, errors, empty states, and confirmations for destructive actions.
 
 The requirement-by-requirement implementation map is in [docs/requirements.md](docs/requirements.md). The demonstration walkthrough is in [docs/demo-guide.md](docs/demo-guide.md).
+
+Deleting a student account removes its application records and invalidates its server session. It does not delete the Firebase Authentication user, which may self-register again. Suspend an account when the goal is to block access; remove the Firebase user separately in Firebase if its identity should also be deleted. The administrator cannot create another login-capable administrator through the account form. The coursework checklist asks administrators to create user accounts; this branch deliberately leaves that part uncovered because students now self-register.
 
 ## Architecture and template conventions
 
@@ -71,20 +65,20 @@ apps/
       connection/   controller, service, model: buddy-request lifecycle
       group/        controller, service, model: membership and leadership rules
       admin/        controller, service, model: account lifecycle and usage
-      auth/         demo sessions, trusted Actor, API request interception
+      auth/         Firebase token verification, sessions, trusted Actor, API interception
       persistence/  H2 repository and one-time deterministic seed data
       common/       validation helpers and consistent API errors
       config/       origins and request-interceptor configuration
     src/main/resources/
       application.properties  external settings and default matching weights
       schema.sql              database tables
-    src/test/                 real-H2 API integration and concurrency tests
+    src/test/                 real-H2 API integration tests with a fake token verifier
   frontend/
     src/app/                  layout, navigation, and global styling
     src/features/             profile, matching, connections, groups, admin screens
     src/components/           reusable form controls and feedback
     src/lib/                  TypeScript contracts and HTTP client
-scripts/smoke_test.py          isolated HTTP/restart verification
+scripts/smoke_test.py          optional real-HTTP admin and restart check
 ```
 
 The original package names, model names, controller/service/model separation, frontend API/types boundary, Nx workspace, and configurable matching properties are retained. Backend Nx commands are explicitly defined in `apps/backend/project.json`; redundant Spring plugin target inference was removed because it misidentified Maven projects when Next.js constructed the graph from the frontend directory. Domain logic stays in Java services; frontend components only collect input and render responses. See [docs/architecture.md](docs/architecture.md) for diagrams and design decisions.
@@ -114,12 +108,15 @@ The selected search course drives course scoring; with **All courses**, the stud
 Default weights are **40 / 25 / 15 / 15 / 5**. Strategies are explicit design choices:
 
 - `BALANCED`: use the administrator's relative weights.
-- `AVAILABILITY_FIRST`: multiply availability weight by three before normalization.
-- `COURSE_FIRST`: multiply course weight by three before normalization.
+- `AVAILABILITY_FIRST`: rank by shared unique weekly minutes, then score and student ID.
+- `COURSE_FIRST`: rank by exact preferred-course match, then current-course enrolment, then score and student ID.
+- `PARETO`: compare all enabled compatibility factors. Front 1 has no candidate that is at least as good on every enabled factor and better on one; remove it and repeat to find fronts 2, 3, etc. Rank by front, then score and student ID.
 
-Effective weights are normalized to exactly 100 using the largest-remainder method, with stable criterion-order ties. Each contribution is `round(effectiveWeight × compatibilityFactor)`. The displayed score is the sum, from 0 to 100. Results sort by descending score, then student ID for deterministic ties. The result count is limited to the configured 1–50. Disabled criteria stay disabled under every strategy. These strategies emphasize a criterion through weights; they are not strict lexicographic rankings.
+Effective weights are normalized to exactly 100 using the largest-remainder method, with stable criterion-order ties. Each contribution is `round(effectiveWeight × compatibilityFactor)`. The displayed 0–100 compatibility score is the sum. Balanced results sort by score; the other strategies use the priorities above, so a higher ranked result can have a lower score. Each result states its ranking reason. A zero weight removes a criterion from Pareto comparisons and disables its strict priority in the course-first or availability-first strategy. The result count is limited to the configured 1–50. Pareto sorting makes pairwise comparisons across all eligible peers (O(n² × 5)); it is suitable for this coursework data size, not a large matching marketplace.
 
 Example: with default balanced weights, exact preferred-course alignment, 60 shared minutes out of 120, compatible mode, the same goal, and equal compatible group sizes gives `40 + 13 + 15 + 15 + 5 = 88`.
+
+For the algorithm concepts, trade-offs and presentation example, see [matching algorithms](docs/matching-algorithms.md).
 
 ## Group and account rules
 
@@ -130,7 +127,7 @@ Example: with default balanced weights, exact preferred-course alignment, 60 sha
 - Closed groups may retain a historical leader ID even after that person exits or is deleted; the UI labels unavailable historical accounts. Active groups always have a valid leader/member.
 - An administrator must transfer leadership or close a student's active groups before suspending/deleting their account. Administrators can perform that override in **Study groups**.
 - Suspension removes students from matching and blocks their existing sessions; reactivation restores access. Existing relationships remain historical/active records until explicitly ended or the account is deleted.
-- Account deletion removes the profile, buddy requests, membership requests, and membership references transactionally. Administrators cannot delete or suspend themselves. Existing account roles are fixed; create a new account for another role.
+- Account deletion removes the profile, buddy requests, membership requests, and membership references transactionally. Administrators cannot delete or suspend themselves. Existing account roles are fixed.
 
 ## Configuration
 
@@ -143,22 +140,26 @@ Backend environment variables:
 | `DATABASE_URL` | `jdbc:h2:file:./data/studybuddy;DB_CLOSE_ON_EXIT=FALSE` | Database URL, relative to backend working directory |
 | `DATABASE_USERNAME` | `sa` | H2 username |
 | `DATABASE_PASSWORD` | empty | Local H2 password |
-| `DEMO_ENABLED` | `true` | Enable explicit demo account selection |
+| `FIREBASE_SERVICE_ACCOUNT` | none supplied | Plain absolute path to the private Firebase Admin JSON key outside the project directory; required to start the backend |
+| `FIREBASE_DATABASE_URL` | Project Realtime Database URL | Firebase Admin initialisation; study data still uses H2 |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Demo values in `application.properties` | Separate administrator sign-in; override for shared use |
 | `CORS_ALLOWED_ORIGINS` | localhost and 127.0.0.1 on ports 3000 and 4200 | Comma-separated browser origins |
 
-Frontend: `BACKEND_URL` defaults to `http://127.0.0.1:8080`. Set it in `apps/frontend/.env.local` using `.env.example` as a guide, or export it before starting/building Next.js. The frontend calls same-origin `/api` URLs, forwarded using Next.js rewrites. Restart Next.js after changing the URL; production rewrites are captured at build time. For a custom frontend port, add its exact origin to `CORS_ALLOWED_ORIGINS` on the backend as well.
+Frontend: the required public Firebase web-app values are listed in `apps/frontend/.env.example`. `BACKEND_URL` defaults to `http://127.0.0.1:8080`; set it in `apps/frontend/.env` if needed. The frontend calls same-origin `/api` URLs, forwarded using Next.js rewrites. Restart Next.js after changing these values; production rewrites and `NEXT_PUBLIC_*` values are captured at build time. For a custom frontend port, add its exact origin to `CORS_ALLOWED_ORIGINS` on the backend as well.
 
 Default matching values live under `app.matching.*` in `application.properties`. Once an administrator saves a configuration, the database value takes precedence over file defaults. Backend environment variables must be exported or passed to Java; Spring Boot does not automatically read the frontend `.env.local` file.
 
 ## API reference
 
-Every `/api` route except demo session selection/listing requires an active server session. Mutations require `X-StudyBuddy-Request: 1`. Browser requests additionally pass the configured origin policy. IDs used for ownership are derived from the session. JSON errors use `{ "error": "Readable message" }`; validation is 400, missing session 401, permission failures 403, missing records 404, and conflicting lifecycle operations 409.
+Every `/api` route except student login/sign-up and administrator login requires an active server session. Mutations require `X-StudyBuddy-Request: 1`. Browser requests additionally pass the configured origin policy. IDs used for ownership are derived from the session. JSON errors use `{ "error": "Readable message" }`; validation is 400, missing session 401, permission failures 403, missing records 404, and conflicting lifecycle operations 409.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/` | Backend health |
-| GET | `/api/session/accounts` | Active demo account choices, without contacts |
-| POST / GET / DELETE | `/api/session` | Select `{accountId}`, current session, sign out |
+| POST | `/api/session/signup` | Register a student with `{idToken, name}` after Firebase registration |
+| POST | `/api/session/login` | Exchange a verified Firebase `{idToken}` for a server session |
+| POST | `/api/session/admin-login` | Administrator username/password login |
+| GET / DELETE | `/api/session` | Current account / sign out |
 | GET | `/api/students` | Active public profile directory |
 | GET | `/api/students/courses` | Course catalogue |
 | GET | `/api/students/{id}` | Viewer-aware profile/contact visibility |
@@ -192,23 +193,22 @@ npm run build
 cd apps/backend
 ./mvnw package
 cd ../..
-python3 scripts/smoke_test.py
 ```
 
-The backend suite contains 16 integration tests using real H2 and separate mock HTTP sessions. Coverage includes privacy before/after acceptance/ending, actor spoofing, authorization, nested input validation, request transitions, filters, configurable strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, and admin override.
+The backend suite contains 22 tests: 19 HTTP integration tests using real H2 and separate sessions, plus 3 focused ranking tests. Only the external Firebase token-verification boundary is mocked; these tests do not need a private service-account key. Coverage includes session and role checks, privacy before/after acceptance/ending, actor spoofing, nested input validation, request transitions, filters, matching strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, admin override, and demo venue booking conflicts and release.
 
-The smoke script starts real backend processes on temporary loopback ports and uses a disposable file database. It verifies profile changes, accepted connections/contact access, group membership, matching configuration, and account deletion survive a restart. It never modifies the normal demo database. Python 3 is only needed for this extra smoke check.
+With a local Firebase service-account file configured and the backend JAR built, run `python3 scripts/smoke_test.py` for a real-HTTP administrator session and H2 restart check against a disposable database. It does not exercise live student sign-in. The live Firebase walkthrough is recorded in `docs/verification.md`; it used a disposable in-memory H2 database. Run it again with your own Firebase configuration before a class demonstration.
 
-Mockito's subclass mock maker is selected in test resources because these tests do not need instrumented final/static mocks. This avoids JVM self-attachment requirements in restricted environments. The application itself does not use Mockito.
+The test resources select Mockito's subclass mock maker. On the verified JDK 25 run, Mockito still prints a non-fatal dynamic-agent warning; all tests complete successfully. The application itself does not use Mockito.
 
-Browser verification covered demo login/switching, new-student onboarding, matching, contact privacy and acceptance, group creation/join approval/leadership transfer, admin account creation/settings, and desktop/mobile layout. See [docs/verification.md](docs/verification.md) for the recorded results and limits.
+See [docs/verification.md](docs/verification.md) for the live Firebase browser check, its limits and the separate historical pre-Firebase results.
 
 ## Libraries and assumptions
 
-The starter's Spring Boot 3.2.3, Next.js 16, React 19, TypeScript, Tailwind/PostCSS, and Nx tooling are retained. Spring Validation handles input constraints; Spring JDBC and H2 add local persistence; JUnit/Spring Test verify real service/database behavior. No external matching API, paid service, email delivery, or AI service is required.
+Spring Boot 3.5.16 supports the branch's Java 25 target. Next.js 16, React 19, TypeScript, Tailwind/PostCSS, and Nx remain in the template structure. Spring Validation handles input constraints; Spring JDBC and H2 provide local persistence; JUnit/Spring Test verify service/database behaviour. Firebase Authentication is required for live student login; matching itself uses no external API or AI service.
 
 The template represents one current matching preference and one primary study goal per student/group. Weekly availability can contain multiple slots. There is no chat, notification delivery, attendance tracking, or automatic scheduling in the required scope; request inboxes and group status provide in-app feedback. Personal team assignments and a final presentation deck need the team's own authorship. This implementation includes a demo guide and architecture/UML material, not invented contributions or a completed presentation.
 
 AI assistance was used for implementation, tests, documentation, and verification. Team members should review the code, understand and explain the design, verify the rubric mapping, and accurately disclose AI use in their submission.
 
-Reference documentation: [Spring Boot SQL/JDBC](https://docs.spring.io/spring-boot/docs/3.2.6/reference/html/data.html) and [Next.js rewrites](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites).
+Reference documentation: [Spring Boot 3.5 system requirements](https://docs.spring.io/spring-boot/3.5/system-requirements.html) and [Next.js rewrites](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites).

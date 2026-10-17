@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.3</version>
+        <version>3.5.16</version>
         <relativePath/>
     </parent>
     <groupId>studybuddy</groupId>
@@ -15,7 +15,7 @@
     <description>Spring Boot backend for an OOP Study Buddy Matcher System</description>
 
     <properties>
-        <java.version>17</java.version>
+        <java.version>25</java.version>
     </properties>
 
     <dependencies>

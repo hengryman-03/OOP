@@ -1,13 +1,13 @@
 package studybuddy.backend.auth;
 
-import com.google.firebase.auth.FirebaseToken;
-
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import studybuddy.backend.admin.model.UserAccount;
@@ -44,21 +44,24 @@ public class SessionController {
 
     public record TokenLogin(@NotBlank String idToken) {}
 
-    public record SignUp(@NotBlank String idToken, @NotBlank String name) {}
+    public record SignUp(@NotBlank String idToken, @NotBlank @Size(max = 100) String name) {}
 
     public record AdminLogin(@NotBlank String username, @NotBlank String password) {}
 
     /** Login: verify Firebase ID token and establish a session. */
     @PostMapping("/login")
+    @Transactional
     public UserAccount login(@Valid @RequestBody TokenLogin body, HttpServletRequest request) {
-        FirebaseToken token = firebaseConfig.verifyIdToken(body.idToken());
-        String uid = token.getUid();
+        String uid = firebaseConfig.verifiedUid(body.idToken());
+        repository.lock();
         UserAccount account =
                 repository
                         .find(UserAccount.class, uid)
                         .orElseThrow(() -> DomainException.missing("No account found for this user."));
         if (!"ACTIVE".equals(account.getStatus()))
             throw DomainException.forbidden("This account is suspended.");
+        account.setLastActiveAt(Instant.now());
+        repository.save(uid, account);
         HttpSession session = request.getSession();
         session.setAttribute("accountId", uid);
         request.changeSessionId();
@@ -67,14 +70,17 @@ public class SessionController {
 
     /** Sign up: verify Firebase ID token, create a new student account, and establish a session. */
     @PostMapping("/signup")
+    @Transactional
     public UserAccount signup(@Valid @RequestBody SignUp body, HttpServletRequest request) {
-        FirebaseToken token = firebaseConfig.verifyIdToken(body.idToken());
-        String uid = token.getUid();
+        String uid = firebaseConfig.verifiedUid(body.idToken());
+        repository.lock();
         if (repository.find(UserAccount.class, uid).isPresent())
             throw new DomainException(
                     org.springframework.http.HttpStatus.CONFLICT, "Account already exists.");
         UserAccount account = new UserAccount(uid, body.name(), "STUDENT", "ACTIVE");
-        account.setCreatedAt(Instant.now());
+        Instant now = Instant.now();
+        account.setCreatedAt(now);
+        account.setLastActiveAt(now);
         repository.save(uid, account);
         HttpSession session = request.getSession();
         session.setAttribute("accountId", uid);
@@ -87,11 +93,13 @@ public class SessionController {
      * account signs in with credentials configured in application.properties (env-overridable).
      */
     @PostMapping("/admin-login")
+    @Transactional
     public UserAccount adminLogin(@Valid @RequestBody AdminLogin body, HttpServletRequest request) {
         boolean ok =
                 constantTimeEquals(adminUsername, body.username())
                         & constantTimeEquals(adminPassword, body.password());
         if (!ok) throw DomainException.forbidden("Incorrect administrator credentials.");
+        repository.lock();
         UserAccount account =
                 repository
                         .find(UserAccount.class, adminAccountId)
@@ -99,6 +107,8 @@ public class SessionController {
                                 () -> DomainException.missing("The administrator account is unavailable."));
         if (!"ACTIVE".equals(account.getStatus()))
             throw DomainException.forbidden("This account is suspended.");
+        account.setLastActiveAt(Instant.now());
+        repository.save(adminAccountId, account);
         HttpSession session = request.getSession();
         session.setAttribute("accountId", adminAccountId);
         request.changeSessionId();

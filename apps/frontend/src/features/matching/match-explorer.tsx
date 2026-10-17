@@ -294,8 +294,8 @@ export function MatchExplorer({
                   </div>
                 ))}
                 <p>
-                  Points reflect the administrator’s current strategy and
-                  weights.
+                  {match.rankingReason} Points reflect the administrator’s
+                  weights and add up to the compatibility score.
                 </p>
               </details>
               <button

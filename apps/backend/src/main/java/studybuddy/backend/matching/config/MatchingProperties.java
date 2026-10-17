@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.matching")
 public class MatchingProperties {
     @NotNull
-    @Pattern(regexp = "BALANCED|AVAILABILITY_FIRST|COURSE_FIRST")
+    @Pattern(regexp = "BALANCED|AVAILABILITY_FIRST|COURSE_FIRST|PARETO")
     private String strategy = "BALANCED";
 
     @Min(0)
