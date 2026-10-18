@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { api } from '@/lib/study-buddy-api';
+import { firebaseConfigured, getFirebaseAuth } from '@/lib/firebase';
 import {
   Account,
   AccountDetail,
@@ -25,6 +27,13 @@ export function AdminPanel({
   const [weights, setWeights] = useState(config),
     [draft, setDraft] = useState<Partial<Account> | null>(null),
     [search, setSearch] = useState('');
+  const [inviteName, setInviteName] = useState(''),
+    [inviteEmail, setInviteEmail] = useState(''),
+    [inviteBusy, setInviteBusy] = useState(false),
+    [inviteFeedback, setInviteFeedback] = useState<{
+      text: string;
+      error: boolean;
+    } | null>(null);
   const action = useAction(refresh);
   const [detailFor, setDetailFor] = useState<Account | null>(null),
     [detail, setDetail] = useState<AccountDetail | null>(null),
@@ -61,6 +70,49 @@ export function AdminPanel({
     (sum, key) => sum + Number(weights[key as keyof typeof weightLabels]),
     0,
   );
+  async function inviteStudent() {
+    setInviteBusy(true);
+    setInviteFeedback(null);
+    let created: Account;
+    try {
+      created = await api<Account>('/admin/accounts/invitations', 'POST', {
+        name: inviteName.trim(),
+        email: inviteEmail.trim(),
+      });
+    } catch (error) {
+      setInviteFeedback({
+        text:
+          error instanceof Error ? error.message : 'Could not create account.',
+        error: true,
+      });
+      setInviteBusy(false);
+      return;
+    }
+    refresh();
+    setInviteName('');
+    setInviteEmail('');
+    const address = created.email ?? inviteEmail.trim();
+    try {
+      await sendPasswordResetEmail(getFirebaseAuth(), address);
+      setInviteFeedback({
+        text: `Account created for ${address}. Firebase accepted the invitation email request; ask the student to check their inbox and then log in.`,
+        error: false,
+      });
+    } catch (error) {
+      setInviteFeedback({
+        text: `Account created for ${address}, but the invitation email request failed. Use Resend invite below. ${error instanceof Error ? error.message : ''}`,
+        error: true,
+      });
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+  function resendInvite(email: string) {
+    void action.run(
+      () => sendPasswordResetEmail(getFirebaseAuth(), email),
+      'Firebase accepted the invitation email request.',
+    );
+  }
   return (
     <div className="stack">
       <div className="stats-grid">
@@ -183,11 +235,62 @@ export function AdminPanel({
           <div>
             <h2>User accounts</h2>
             <p>
-              Students create accounts through registration. Review activity and
-              manage the name or status of existing accounts here.
+              Invite students by email, or manage existing account names and
+              statuses. Students can still self-register.
             </p>
           </div>
         </div>
+        <form
+          className="account-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void inviteStudent();
+          }}
+        >
+          <h3>Invite a student</h3>
+          <p className="help">
+            Creates a Firebase login and requests an email link for the student
+            to set their password. Use an inbox the student can access.
+          </p>
+          <div className="form-grid">
+            <Field label="Student name">
+              <input
+                required
+                maxLength={100}
+                value={inviteName}
+                onChange={(event) => setInviteName(event.target.value)}
+              />
+            </Field>
+            <Field label="Student email">
+              <input
+                required
+                type="email"
+                maxLength={254}
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+              />
+            </Field>
+          </div>
+          <button
+            className="button"
+            disabled={inviteBusy || !firebaseConfigured}
+          >
+            {inviteBusy ? 'Creating account…' : 'Create account and invite'}
+          </button>
+          {!firebaseConfigured && (
+            <p className="help">
+              Firebase web configuration is required to send invitations.
+            </p>
+          )}
+          {inviteFeedback && (
+            <div
+              className={`notice ${inviteFeedback.error ? 'error' : 'success'}`}
+              role={inviteFeedback.error ? 'alert' : 'status'}
+            >
+              {inviteFeedback.text}
+            </div>
+          )}
+        </form>
         {draft && (
           <form
             className="account-form"
@@ -263,7 +366,7 @@ export function AdminPanel({
             <tbody>
               {accounts
                 .filter((a) =>
-                  `${a.account.name} ${a.account.id}`
+                  `${a.account.name} ${a.account.id} ${a.account.email ?? ''}`
                     .toLowerCase()
                     .includes(search.toLowerCase()),
                 )
@@ -279,6 +382,7 @@ export function AdminPanel({
                       <td>
                         <strong>{a.name}</strong>
                         <small>{a.id}</small>
+                        {a.email && <small>{a.email}</small>}
                         <small>
                           {label(a.role)}
                           {a.role === 'STUDENT' && !profileComplete
@@ -316,6 +420,17 @@ export function AdminPanel({
                       </td>
                       <td>
                         <div className="actions">
+                          {a.email &&
+                            !profileComplete &&
+                            a.status === 'ACTIVE' && (
+                              <button
+                                className="button ghost"
+                                disabled={action.busy || !firebaseConfigured}
+                                onClick={() => a.email && resendInvite(a.email)}
+                              >
+                                Resend invite
+                              </button>
+                            )}
                           <button
                             className="button ghost"
                             onClick={() => setDraft(a)}
@@ -328,13 +443,13 @@ export function AdminPanel({
                             onClick={() => {
                               if (
                                 window.confirm(
-                                  `Delete ${a.name}'s account, profile, and requests? This cannot be undone.`,
+                                  `Delete ${a.name}'s account, related records, and Firebase identity if present? This cannot be undone.`,
                                 )
                               )
                                 void action.run(
                                   () =>
                                     api(`/admin/accounts/${a.id}`, 'DELETE'),
-                                  'Account and related personal records deleted.',
+                                  'Account, Firebase identity (if present), and related records deleted.',
                                 );
                             }}
                           >

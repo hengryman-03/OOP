@@ -245,69 +245,83 @@ export function MatchExplorer({
           Try another course or broaden your availability.
         </Empty>
       ) : (
-        <div className="match-grid">
-          {matches.map((match, index) => (
-            <article className="panel match-card" key={match.student.id}>
-              <div className="match-top">
-                <Avatar name={match.student.name} large />
-                <div className="score">
-                  <strong>
-                    {match.score}
-                    <small>%</small>
-                  </strong>
-                  <span>compatibility</span>
-                </div>
-              </div>
-              <h3>{match.student.name}</h3>
-              <p className="muted-text">
-                {match.student.programme} · Year {match.student.yearOfStudy}
-              </p>
-              <div className="tags">
-                <Badge>{match.student.preference.courseCode}</Badge>
-                <Badge muted>
-                  {label(match.student.preference.preferredMode)}
-                </Badge>
-                {index === 0 && <Badge>Top match</Badge>}
-              </div>
-              <p className="goal-text">
-                {label(match.student.preference.studyGoal)}
-              </p>
-              <Times slots={match.student.preference.availability} />
-              <details className="score-details">
-                <summary>Why this match?</summary>
-                {Object.entries(match.breakdown).map(([key, value]) => (
-                  <div className="breakdown-row" key={key}>
-                    <span>
-                      {
-                        (
-                          {
-                            courseScore: 'Course',
-                            availabilityScore: 'Availability',
-                            studyModeScore: 'Meeting mode',
-                            studyGoalScore: 'Study goal',
-                            groupSizeScore: 'Group size & arrangement',
-                          } as Record<string, string>
-                        )[key]
-                      }
-                    </span>
-                    <strong>{value} pts</strong>
+        <>
+          {matches.some((match) => match.paretoFront != null) && (
+            <p className="help" role="note">
+              Pareto results are grouped by trade-offs first. Front 1 has no
+              candidate who is better on every enabled criterion; the weighted
+              score orders students within each front. A lower score can
+              therefore appear above a higher one.
+            </p>
+          )}
+          <div className="match-grid">
+            {matches.map((match, index) => (
+              <article className="panel match-card" key={match.student.id}>
+                <div className="match-top">
+                  <Avatar name={match.student.name} large />
+                  <div className="score">
+                    <strong>
+                      {match.score}
+                      <small>%</small>
+                    </strong>
+                    <span>weighted score</span>
                   </div>
-                ))}
-                <p>
-                  {match.rankingReason} Points reflect the administrator’s
-                  weights and add up to the compatibility score.
+                </div>
+                <h3>{match.student.name}</h3>
+                <p className="muted-text">
+                  {match.student.programme} · Year {match.student.yearOfStudy}
                 </p>
-              </details>
-              <button
-                className="button secondary wide"
-                disabled={action.busy}
-                onClick={() => void view(match.student.id)}
-              >
-                View study profile <span aria-hidden="true">↗</span>
-              </button>
-            </article>
-          ))}
-        </div>
+                <div className="tags">
+                  <Badge>{match.student.preference.courseCode}</Badge>
+                  <Badge muted>
+                    {label(match.student.preference.preferredMode)}
+                  </Badge>
+                  {match.paretoFront != null && (
+                    <Badge>Pareto front {match.paretoFront}</Badge>
+                  )}
+                  {index === 0 && <Badge>Top-ranked</Badge>}
+                </div>
+                <p className="muted-text">{match.rankingReason}</p>
+                <p className="goal-text">
+                  {label(match.student.preference.studyGoal)}
+                </p>
+                <Times slots={match.student.preference.availability} />
+                <details className="score-details">
+                  <summary>Why this match?</summary>
+                  {Object.entries(match.breakdown).map(([key, value]) => (
+                    <div className="breakdown-row" key={key}>
+                      <span>
+                        {
+                          (
+                            {
+                              courseScore: 'Course',
+                              availabilityScore: 'Availability',
+                              studyModeScore: 'Meeting mode',
+                              studyGoalScore: 'Study goal',
+                              groupSizeScore: 'Group size & arrangement',
+                            } as Record<string, string>
+                          )[key]
+                        }
+                      </span>
+                      <strong>{value} pts</strong>
+                    </div>
+                  ))}
+                  <p>
+                    Points reflect the administrator’s weights and add up to the
+                    weighted score.
+                  </p>
+                </details>
+                <button
+                  className="button secondary wide"
+                  disabled={action.busy}
+                  onClick={() => void view(match.student.id)}
+                >
+                  View study profile <span aria-hidden="true">↗</span>
+                </button>
+              </article>
+            ))}
+          </div>
+        </>
       )}
       {selected && (
         <section

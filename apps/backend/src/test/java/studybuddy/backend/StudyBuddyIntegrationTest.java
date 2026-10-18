@@ -2,6 +2,9 @@ package studybuddy.backend;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -137,6 +140,9 @@ class StudyBuddyIntegrationTest {
         assertEquals(50, call(student, get("/api/students"), 200).size());
         assertEquals(10, call(student, get("/api/students/courses"), 200).size());
         call(student, get("/api/admin/accounts"), 403);
+        call(student, post("/api/admin/accounts/invitations"),
+                java.util.Map.of("name", "Someone", "email", "someone@example.com"), 403);
+        verify(firebaseConfig, never()).createStudent(anyString(), anyString());
         call(student, get("/api/admin/matching-config"), 403);
         call(student, get("/api/connections/students/S002"), 403);
         call(student, get("/api/students/S002/matches"), 403);
@@ -476,21 +482,47 @@ class StudyBuddyIntegrationTest {
         call(admin, post("/api/admin/accounts"), account, 200);
         call(student, get("/api/students"), 200);
         call(admin, delete("/api/admin/accounts/" + id), 200);
+        verify(firebaseConfig).deleteUser(id);
         call(student, get("/api/students"), 401);
         assertTrue(repository.find(StudentProfile.class, id).isEmpty());
         assertEquals(0, call(login("S004"), get("/api/connections/students/S004"), 200).size());
-        JsonNode reRegistered =
-                call(
-                        admin,
-                        post("/api/session/signup"),
-                        java.util.Map.of("idToken", id, "name", "Returning learner"),
-                        200);
-        assertEquals(id, reRegistered.get("id").asText());
+        when(firebaseConfig.verifiedUid(id))
+                .thenThrow(DomainException.forbidden("Invalid or expired Firebase token."));
+        call(admin, post("/api/session/signup"),
+                java.util.Map.of("idToken", id, "name", "Returning learner"), 403);
         assertTrue(repository.find(StudentProfile.class, id).isEmpty());
     }
 
     @Test
-    void administratorsManageSelfRegisteredAccountsRatherThanCreatingUnusableRecords() throws Exception {
+    void administratorsInviteFirebaseStudentsAndKeepEmailOnUpdate() throws Exception {
+        var admin = login("ADMIN001");
+        when(firebaseConfig.createStudent("Invited Learner", "invited@example.com"))
+                .thenReturn("invited-uid");
+        JsonNode created = call(admin, post("/api/admin/accounts/invitations"),
+                java.util.Map.of("name", " Invited Learner ", "email", "Invited@Example.com"), 200);
+        assertEquals("invited-uid", created.get("id").asText());
+        assertEquals("invited@example.com", created.get("email").asText());
+        assertEquals("invited-uid", call(login("invited-uid"), get("/api/session"), 200).get("id").asText());
+        ObjectNode edited = (ObjectNode) created.deepCopy();
+        edited.remove("email");
+        edited.put("name", "Invited Student");
+        assertEquals("invited@example.com",
+                call(admin, post("/api/admin/accounts"), edited, 200).get("email").asText());
+        call(admin, delete("/api/admin/accounts/invited-uid"), 200);
+        verify(firebaseConfig).deleteUser("invited-uid");
+    }
+
+    @Test
+    void firebaseDeletionFailurePreservesApplicationAccount() throws Exception {
+        var admin = login("ADMIN001");
+        doThrow(new DomainException(org.springframework.http.HttpStatus.BAD_GATEWAY, "Firebase unavailable."))
+                .when(firebaseConfig).deleteUser("S050");
+        call(admin, delete("/api/admin/accounts/S050"), 502);
+        assertTrue(repository.find(studybuddy.backend.admin.model.UserAccount.class, "S050").isPresent());
+    }
+
+    @Test
+    void administratorsCannotCreateAccountsThroughTheUpdateEndpoint() throws Exception {
         var admin = login("ADMIN001");
         call(
                 admin,

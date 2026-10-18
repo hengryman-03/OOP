@@ -46,6 +46,7 @@ export interface MatchResult {
   breakdown: MatchBreakdown;
   explanation: string;
   rankingReason: string;
+  paretoFront: number | null;
 }
 export interface StudyGroup {
   id?: string;
@@ -72,6 +73,7 @@ export interface MatchingConfig {
 export interface Account {
   id: string;
   name: string;
+  email?: string | null;
   role: 'STUDENT' | 'SYSTEM_ADMINISTRATOR';
   status?: 'ACTIVE' | 'SUSPENDED';
   createdAt?: string;

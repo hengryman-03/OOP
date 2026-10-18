@@ -34,9 +34,9 @@ The standalone frontend uses **http://localhost:3000**. Both development entry p
 
 ### Accounts and sample data
 
-Students register or sign in with Firebase email and password. The backend verifies the Firebase ID token and then creates an HttpOnly server session. A newly registered student completes **My profile** before matching. If Firebase registration succeeds while the backend is unavailable, sign in later and use **Finish registration** to create the missing application account. The administrator uses the separate administrator sign-in, configured by `ADMIN_USERNAME` and `ADMIN_PASSWORD`; override the demo defaults before sharing the app.
+Students register or sign in with Firebase email and password. The backend verifies the Firebase ID token, including revocation, and then creates an HttpOnly server session. A newly registered student completes **My profile** before matching. If Firebase registration succeeds while the backend is unavailable, sign in later and use **Finish registration** to create the missing application account. The administrator uses the separate administrator sign-in, configured by `ADMIN_USERNAME` and `ADMIN_PASSWORD`; override the demo defaults before sharing the app.
 
-The database seeds 50 fictional student profiles and 10 courses for matching demonstrations. Those seeded `S001`–`S050` records are **not** Firebase users, so they cannot be selected as login accounts. To demonstrate two-way requests or group decisions in the browser, register two Firebase users and complete their profiles. Login-capable students self-register; administrators manage existing accounts and cannot create new sign-in identities.
+The database seeds 50 fictional student profiles and 10 courses for matching demonstrations. Those seeded `S001`–`S050` records are **not** Firebase users, so they cannot be selected as login accounts. To demonstrate two-way requests or group decisions in the browser, create two Firebase users and complete their profiles. Students may self-register. Administrators can also enter a student's name and email in **User accounts** to create a passwordless Firebase user and its application account, then request Firebase's password-reset email so the student can set a password. Use a team-controlled real inbox for a live demonstration. Firebase accepting the email request does not prove delivery; check inbox/spam and use **Resend invite** if needed. An invited student should use **Log in** after setting the password, not **Register**.
 
 ## Implemented features
 
@@ -45,14 +45,14 @@ The database seeds 50 fictional student profiles and 10 courses for matching dem
 - Public profiles hide contacts. An accepted buddy request reveals contacts to both participants; ending it revokes contact access. Directory and matching responses always omit contacts.
 - Buddy requests with optional messages, inbox/sent/history views, accept/decline, active connections, and ending connections. Self-requests, duplicate/reverse pending requests, forged senders, and invalid status transitions are rejected.
 - Group creation/editing/closure, course discovery, membership requests and decisions, capacity enforcement, removal, ordinary member exit, leadership transfer, and the team-added leader exit rule.
-- Administrator name/status updates and deletion with related personal-record cleanup, profile-completion status, active-buddy counts, group counts, pending-request counts, and last sign-in time. New login-capable student accounts come from self-registration.
+- Administrator student invitations, name/status updates and deletion with Firebase identity and related personal-record cleanup, profile-completion status, active-buddy counts, group counts, pending-request counts and last sign-in time.
 - Administrator strategy/weight/result-limit configuration saved immediately to the database. A weight of zero disables that criterion.
 - Seed data installed once: 10 courses, 50 fictional student profiles and student accounts, 1 administrator, and 3 study groups. Deleted seed accounts do not reappear at restart.
 - Responsive interface with validation, request-in-progress states, errors, empty states, and confirmations for destructive actions.
 
 The requirement-by-requirement implementation map is in [docs/requirements.md](docs/requirements.md). The demonstration walkthrough is in [docs/demo-guide.md](docs/demo-guide.md).
 
-Deleting a student account removes its application records and invalidates its server session. It does not delete the Firebase Authentication user, which may self-register again. Suspend an account when the goal is to block access; remove the Firebase user separately in Firebase if its identity should also be deleted. The administrator cannot create another login-capable administrator through the account form. The coursework checklist asks administrators to create user accounts; this branch deliberately leaves that part uncovered because students now self-register.
+Deleting a student account removes its application records, requests, profile, Firebase Authentication identity if present and server-session access. Seeded fictional accounts have no Firebase identity. Firebase deletion and H2 cleanup are separate operations: Firebase is deleted first and a missing identity is safe on retry. A failed Firebase call stops application deletion; if H2 cleanup fails after Firebase deletion, retry the administrator delete. Deletion does not ban an email from registering a new UID; suspend an account when the goal is to block its current access. The administrator cannot create another administrator through the account form.
 
 ## Architecture and template conventions
 
@@ -110,7 +110,7 @@ Default weights are **40 / 25 / 15 / 15 / 5**. Strategies are explicit design ch
 - `BALANCED`: use the administrator's relative weights.
 - `AVAILABILITY_FIRST`: rank by shared unique weekly minutes, then score and student ID.
 - `COURSE_FIRST`: rank by exact preferred-course match, then current-course enrolment, then score and student ID.
-- `PARETO`: compare all enabled compatibility factors. Front 1 has no candidate that is at least as good on every enabled factor and better on one; remove it and repeat to find fronts 2, 3, etc. Rank by front, then score and student ID.
+- `PARETO`: compare all enabled compatibility factors. Front 1 has no candidate that is at least as good on every enabled factor and better on one; remove it and repeat to find fronts 2, 3, etc. Rank by front, then score and student ID. Cards show the front separately from their weighted score so a lower score above a higher one is explainable.
 
 Effective weights are normalized to exactly 100 using the largest-remainder method, with stable criterion-order ties. Each contribution is `round(effectiveWeight × compatibilityFactor)`. The displayed 0–100 compatibility score is the sum. Balanced results sort by score; the other strategies use the priorities above, so a higher ranked result can have a lower score. Each result states its ranking reason. A zero weight removes a criterion from Pareto comparisons and disables its strict priority in the course-first or availability-first strategy. The result count is limited to the configured 1–50. Pareto sorting makes pairwise comparisons across all eligible peers (O(n² × 5)); it is suitable for this coursework data size, not a large matching marketplace.
 
@@ -179,8 +179,9 @@ Every `/api` route except student login/sign-up and administrator login requires
 | POST | `/api/groups/{id}/leader-quits?replacementLeaderId=...` | Transfer and leave; alone means close |
 | POST | `/api/groups/{id}/leader-quits?closeGroup=true` | Close and leave |
 | POST | `/api/groups/{id}/close` | Close; members remain in historical record |
-| GET / POST | `/api/admin/accounts` | Usage summaries / create or update account |
-| DELETE | `/api/admin/accounts/{id}` | Delete account and related records |
+| GET / POST | `/api/admin/accounts` | Usage summaries / update an existing account |
+| POST | `/api/admin/accounts/invitations` | Create a Firebase-backed student with `{name, email}`; browser requests the invite email |
+| DELETE | `/api/admin/accounts/{id}` | Delete the Firebase identity if present, then the account and related records |
 | GET / PUT | `/api/admin/matching-config` | View/update weights, strategy, result limit |
 
 ## Verification

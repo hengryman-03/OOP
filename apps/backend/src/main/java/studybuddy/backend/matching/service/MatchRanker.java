@@ -49,6 +49,7 @@ final class MatchRanker {
                 .map(
                         i -> {
                             Candidate candidate = candidates.get(i);
+                            candidate.result().setParetoFront(fronts == null ? null : fronts[i]);
                             candidate.result().setRankingReason(reason(config, candidate, fronts, i));
                             return candidate.result();
                         })

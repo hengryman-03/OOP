@@ -8,6 +8,7 @@ public class MatchResult {
     private MatchBreakdown breakdown;
     private String explanation;
     private String rankingReason;
+    private Integer paretoFront;
 
     public MatchResult() {}
 
@@ -56,5 +57,13 @@ public class MatchResult {
 
     public void setRankingReason(String rankingReason) {
         this.rankingReason = rankingReason;
+    }
+
+    public Integer getParetoFront() {
+        return paretoFront;
+    }
+
+    public void setParetoFront(Integer paretoFront) {
+        this.paretoFront = paretoFront;
     }
 }
