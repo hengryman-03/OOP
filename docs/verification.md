@@ -1,6 +1,16 @@
 # Verification record
 
-Verified locally on 8 September 2026. All browser mutations used fictional demo accounts in an isolated test database.
+## Live Firebase and browser check — 17 October 2026
+
+The frontend used the supplied Firebase web configuration and the backend used the supplied Firebase Admin key, stored outside the project directory. The backend used an isolated in-memory H2 database for this check; its application data was deliberately discarded at restart. Two disposable Firebase users were created with unique test addresses. The browser check verified student registration and login, profile completion, 50 seeded profiles and 10 courses, a 100% peer match with five score contributions, contact privacy before and after buddy acceptance and again after ending the connection, group creation and joining, leader transfer, administrator login rejection and success, saving Pareto strategy and seeing the changed ranking explanation.
+
+After a backend restart, the same Firebase identity reached **Finish registration**, created a fresh application account and entered the app. The backend started with a plain absolute `FIREBASE_SERVICE_ACCOUNT` path. The admin table displayed sign-in timestamps for the recovered student and administrator. Backend integration tests passed after the sign-in timestamp change: 19 HTTP integration tests and 3 focused ranking tests, including a venue recommendation/booking/release test. Frontend typecheck, lint and production build passed. After the disposable check, the local backend was restarted on the existing file-backed H2 database; the frontend and backend returned HTTP 200 and an unauthenticated venue API request returned HTTP 401. The service-account JSON was removed from backend resources because Maven had copied it into `target/classes`; it now lives outside the repository and was not included in the build.
+
+Limits: the browser walkthrough did not exercise every filter, every failure path, venue/session booking or a production deployment. The two test identities remain in Firebase Authentication. The disposable H2 restart erased their profiles, requests and groups, so this restart is **not** evidence of file-backed H2 persistence. The backend tests mock Firebase token verification; only the browser walkthrough verifies real Firebase token exchange. The section below is an older pre-Firebase record and should not be presented as current authentication evidence.
+
+## Historical pre-Firebase check — 8 September 2026
+
+Historical record from 8 September 2026, before Firebase Authentication was merged. All browser mutations used fictional demo accounts in an isolated test database. This record does not verify the current login flow; use the current README test commands and a separate live Firebase check.
 
 | Check | Result |
 | --- | --- |

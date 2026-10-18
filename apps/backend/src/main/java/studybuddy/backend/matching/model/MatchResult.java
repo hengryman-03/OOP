@@ -7,6 +7,7 @@ public class MatchResult {
     private int score;
     private MatchBreakdown breakdown;
     private String explanation;
+    private String rankingReason;
 
     public MatchResult() {}
 
@@ -47,5 +48,13 @@ public class MatchResult {
 
     public void setExplanation(String explanation) {
         this.explanation = explanation;
+    }
+
+    public String getRankingReason() {
+        return rankingReason;
+    }
+
+    public void setRankingReason(String rankingReason) {
+        this.rankingReason = rankingReason;
     }
 }

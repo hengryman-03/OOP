@@ -5,6 +5,8 @@ The supplied template's `student`, `matching`, `connection`, `group`, and `admin
 ```mermaid
 flowchart LR
     UI[Next.js feature screens] --> Client[Typed API client]
+    UI --> FirebaseAuth[Firebase email/password authentication]
+    FirebaseAuth --> Client
     Client --> Proxy[Same-origin API rewrite]
     Proxy --> Session[Session and origin checks]
     Session --> Controllers[Domain controllers]
@@ -47,11 +49,11 @@ classDiagram
 ## Key responsibilities
 
 - `Actor` represents trusted session identity. It is not accepted from JSON. Group leadership is checked dynamically against each group, so a transfer changes permissions immediately.
-- `SessionService` resolves active accounts on every API request; suspension/deletion therefore invalidates existing session access without waiting for cookie expiry. The demo login rotates the session ID. It is intentionally not a password-based identity provider.
+- `FirebaseConfig` verifies student ID tokens before `SessionController` creates a server session. Administrator credentials use a separate login path. Students create their own application account after Firebase registration; a missing application account can be completed after a later sign-in. `SessionService` resolves active accounts on every API request, so suspension/deletion invalidates existing session access without waiting for cookie expiry. Login rotates the session ID. Deletion removes application records; suspension blocks access while retaining the account.
 - `StudentService.publicProfile` is the only viewer-aware contact projection. General directories and ranked matches always hide the number. Administrators do not automatically receive contact details.
 - `ConnectionService` treats an accepted buddy request as the active connection record. A separate redundant `Connection` entity is unnecessary for the specified lifecycle. Declined/ended requests remain history; new requests may then be sent.
 - `AvailabilityCalculator` converts weekly slots to a 10,080-bit minute set. Union removes duplicate coverage; intersection counts shared minutes. This is deterministic and avoids nested-loop double counting.
-- `MatchingService` normalizes configurable weights, applies one of three strategy policies, evaluates five criteria, and constructs a public result with a score breakdown. The pure scoring helpers are separated from configuration persistence and candidate filtering.
+- `MatchingService` filters candidates, evaluates five compatibility factors and constructs a public score breakdown. `MatchRanker` then applies one of four deterministic policies: weighted score, availability-first, course-first or non-dominated Pareto fronts. Configuration and candidate filtering stay separate from ranking.
 - `StudyGroupService` owns membership capacity, decisions, closure, and transfer/exit transitions. Group update preserves membership/status/leader fields even if a client supplies forged values.
 - `AdminService` handles account lifecycle across profiles, requests, and groups inside one transaction. Active leadership prevents deletion/suspension until transferred or closed.
 - `StudyRepository` isolates JSON aggregate persistence. Its lock is acquired before all business writes. H2 transactions roll back the whole action on a business error. A concurrent capacity test verifies the shared lock protects the last available seat.
@@ -65,4 +67,4 @@ H2 JSON aggregates retain the starter's simple POJOs. They provide real restart 
 
 The frontend uses one App Router page with domain components and tab navigation, preserving the template's single dashboard model. Tabs are not bookmarkable routes. State refresh is explicit after mutations or through Refresh data; there is no live cross-browser push. The current session identity is shared between tabs of the same browser cookie context.
 
-The dependencies were retained to respect the template. Before any public deployment, replace the demo identity flow, plan database migrations, review current dependency security support, configure HTTPS, and perform a production security review. None of those deployment changes are claimed here.
+Spring Boot was updated to 3.5 for this branch's Java 25 target. Before any public deployment, configure Firebase credentials and administrator secrets outside source control, plan database migrations, review dependency security support, configure HTTPS, and perform a production security review. None of those deployment changes are claimed here.

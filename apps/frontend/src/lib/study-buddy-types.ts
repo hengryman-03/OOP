@@ -45,6 +45,7 @@ export interface MatchResult {
   score: number;
   breakdown: MatchBreakdown;
   explanation: string;
+  rankingReason: string;
 }
 export interface StudyGroup {
   id?: string;
@@ -60,7 +61,7 @@ export interface StudyGroup {
   status?: 'ACTIVE' | 'CLOSED';
 }
 export interface MatchingConfig {
-  strategy: 'BALANCED' | 'AVAILABILITY_FIRST' | 'COURSE_FIRST';
+  strategy: 'BALANCED' | 'AVAILABILITY_FIRST' | 'COURSE_FIRST' | 'PARETO';
   courseWeight: number;
   availabilityWeight: number;
   studyModeWeight: number;

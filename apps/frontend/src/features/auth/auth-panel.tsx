@@ -7,11 +7,11 @@ import {
   signOut,
 } from 'firebase/auth';
 import { getFirebaseAuth, firebaseConfigured } from '@/lib/firebase';
-import { api } from '@/lib/study-buddy-api';
+import { api, ApiError } from '@/lib/study-buddy-api';
 import { Account } from '@/lib/study-buddy-types';
 import { Field } from '@/components/ui';
 
-type Mode = 'login' | 'register' | 'admin';
+type Mode = 'login' | 'register' | 'finish' | 'admin';
 
 /** Turns Firebase's error codes into messages a student can act on. */
 function friendlyMessage(error: unknown): string {
@@ -51,7 +51,11 @@ function friendlyMessage(error: unknown): string {
  *  - Students log in / register with Firebase email + password (the main login).
  *  - The system administrator signs in with a separate configured username + password.
  */
-export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }) {
+export function AuthPanel({
+  onAuthed,
+}: {
+  onAuthed: (account: Account) => void;
+}) {
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -62,6 +66,9 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
   const [error, setError] = useState('');
 
   function goTo(next: Mode) {
+    if (mode === 'finish' && next !== 'finish') {
+      void signOut(getFirebaseAuth()).catch(() => undefined);
+    }
     setMode(next);
     setError('');
   }
@@ -84,6 +91,19 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
 
       // Student login/register: authenticate with Firebase, then exchange the ID token.
       const auth = getFirebaseAuth();
+      if (mode === 'finish') {
+        if (!auth.currentUser) {
+          throw new Error(
+            'Your sign-in expired. Log in again to finish registration.',
+          );
+        }
+        const account = await api<Account>('/session/signup', 'POST', {
+          idToken: await auth.currentUser.getIdToken(),
+          name: name.trim(),
+        });
+        onAuthed(account);
+        return;
+      }
       const credential =
         mode === 'register'
           ? await createUserWithEmailAndPassword(auth, email, password)
@@ -99,6 +119,15 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
             : await api<Account>('/session/login', 'POST', { idToken });
         onAuthed(account);
       } catch (backendError) {
+        if (
+          mode === 'login' &&
+          backendError instanceof ApiError &&
+          backendError.status === 404
+        ) {
+          // Firebase registration succeeded earlier, but the backend account was never saved.
+          setMode('finish');
+          return;
+        }
         // The Firebase user exists but the backend rejected the session; don't leave a
         // half-signed-in client that can never reach the workspace.
         await signOut(auth).catch(() => undefined);
@@ -156,6 +185,45 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
     );
   }
 
+  if (mode === 'finish') {
+    return (
+      <form className="auth-form" onSubmit={submit}>
+        <div className="auth-heading">
+          <strong>Finish registration</strong>
+          <span>
+            Your Firebase sign-in for {email} exists, but your Study Buddy
+            account has not been created yet.
+          </span>
+        </div>
+        <Field label="Your name">
+          <input
+            type="text"
+            required
+            maxLength={100}
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Field>
+        <button className="button wide" disabled={busy}>
+          {busy ? 'Finishing…' : 'Complete registration'}
+        </button>
+        {error && (
+          <div role="alert" className="notice error">
+            {error}
+          </div>
+        )}
+        <button
+          type="button"
+          className="auth-switch"
+          onClick={() => goTo('login')}
+        >
+          Use another account
+        </button>
+      </form>
+    );
+  }
+
   // Student login / register form.
   const register = mode === 'register';
   return (
@@ -186,6 +254,7 @@ export function AuthPanel({ onAuthed }: { onAuthed: (account: Account) => void }
           <input
             type="text"
             required
+            maxLength={100}
             autoComplete="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
