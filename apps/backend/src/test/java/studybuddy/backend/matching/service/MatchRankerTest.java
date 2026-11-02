@@ -55,6 +55,8 @@ class MatchRankerTest {
         assertEquals(List.of("C", "A", "B"), ids(ranked));
         assertTrue(ranked.get(0).getRankingReason().contains("front 1"));
         assertTrue(ranked.get(2).getRankingReason().contains("front 2"));
+        assertEquals(1, ranked.get(0).getParetoFront());
+        assertEquals(2, ranked.get(2).getParetoFront());
         config.setAvailabilityWeight(0);
         assertEquals(List.of("B", "A", "C"), ids(MatchRanker.rank(peers, config)));
     }

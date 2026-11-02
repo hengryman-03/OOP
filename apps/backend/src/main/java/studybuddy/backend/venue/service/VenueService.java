@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.auth.Actor;
 import studybuddy.backend.common.DomainException;
+import studybuddy.backend.group.model.GroupStatus;
 import studybuddy.backend.group.model.StudyGroup;
 import studybuddy.backend.group.service.StudyGroupService;
 import studybuddy.backend.persistence.StudyRepository;
@@ -40,6 +41,16 @@ public class VenueService {
             throw DomainException.forbidden("You must be a member of this group.");
     }
 
+    private void requireOpen(StudyGroup group) {
+        if (group.getStatus() == GroupStatus.CLOSED)
+            throw DomainException.conflict("This group is closed.");
+    }
+
+    /** Members may join after a session is planned, so the room must also fit today's group. */
+    private int requiredSeats(StudySession session, StudyGroup group) {
+        return Math.max(session.getMaxGroupSize(), group.getMemberIds().size());
+    }
+
     private boolean withinOpeningHours(Room room, DayOfWeek day, LocalTime start, LocalTime end) {
         return room.getWeeklyAvailability().stream()
                 .anyMatch(
@@ -70,13 +81,15 @@ public class VenueService {
         StudySession session = sessionsSvc.required(sessionId);
         StudyGroup group = groups.required(session.getGroupId());
         requireParticipant(group, actor);
+        requireOpen(group);
+        int seats = requiredSeats(session, group);
         DayOfWeek day = session.getSessionDate().getDayOfWeek();
         return repository.all(Room.class).stream()
                 .filter(r -> building == null || building.isBlank() || r.getBuilding().equalsIgnoreCase(building))
                 .filter(r -> !whiteboard || r.isHasWhiteboard())
                 .filter(r -> !projector || r.isHasProjector())
                 .filter(r -> !power || r.isHasPowerSockets())
-                .filter(r -> r.getCapacity() >= session.getMaxGroupSize())
+                .filter(r -> r.getCapacity() >= seats)
                 .filter(r -> withinOpeningHours(r, day, session.getStartTime(), session.getEndTime()))
                 .filter(
                         r ->
@@ -98,12 +111,13 @@ public class VenueService {
         StudySession session = sessionsSvc.required(sessionId);
         StudyGroup group = groups.required(session.getGroupId());
         requireParticipant(group, actor);
+        requireOpen(group);
         Room room =
                 repository
                         .find(Room.class, roomId)
                         .orElseThrow(() -> DomainException.missing("Room not found."));
-        if (room.getCapacity() < session.getMaxGroupSize())
-            throw DomainException.conflict("This room's capacity is below the session's group size.");
+        if (room.getCapacity() < requiredSeats(session, group))
+            throw DomainException.conflict("This room has fewer seats than the group needs.");
         DayOfWeek day = session.getSessionDate().getDayOfWeek();
         if (!withinOpeningHours(room, day, session.getStartTime(), session.getEndTime()))
             throw DomainException.conflict("This room is not open at the session's date and time.");

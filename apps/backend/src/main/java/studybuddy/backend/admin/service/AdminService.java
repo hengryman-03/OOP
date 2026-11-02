@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.admin.model.UserAccount;
 import studybuddy.backend.auth.Actor;
+import studybuddy.backend.auth.FirebaseConfig;
 import studybuddy.backend.common.DomainException;
 import studybuddy.backend.connection.model.*;
 import studybuddy.backend.group.model.*;
@@ -12,13 +13,38 @@ import studybuddy.backend.persistence.StudyRepository;
 import studybuddy.backend.student.model.StudentProfile;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class AdminService {
     private final StudyRepository repository;
+    private final FirebaseConfig firebase;
 
-    public AdminService(StudyRepository repository) {
+    public AdminService(StudyRepository repository, FirebaseConfig firebase) {
         this.repository = repository;
+        this.firebase = firebase;
+    }
+
+    /** Provision the same UID used by student self-registration. The UI sends the invite email. */
+    @Transactional
+    public UserAccount inviteStudent(String name, String email, Actor actor) {
+        actor.requireAdmin();
+        repository.lock();
+        String cleanName = name.trim();
+        String cleanEmail = email.trim().toLowerCase(Locale.ROOT);
+        String uid = firebase.createStudent(cleanName, cleanEmail);
+        try {
+            UserAccount account = new UserAccount(uid, cleanName, "STUDENT", "ACTIVE");
+            account.setEmail(cleanEmail);
+            return repository.save(uid, account);
+        } catch (RuntimeException failure) {
+            try {
+                firebase.deleteUser(uid);
+            } catch (RuntimeException cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
     }
 
     public record AccountUsage(
@@ -126,6 +152,7 @@ public class AdminService {
             if (!"ACTIVE".equals(input.getStatus())) ensureNoActiveLeadership(input.getId());
             input.setCreatedAt(current.getCreatedAt());
             input.setLastActiveAt(current.getLastActiveAt());
+            input.setEmail(current.getEmail());
             repository
                     .find(StudentProfile.class, input.getId())
                     .ifPresent(
@@ -155,6 +182,8 @@ public class AdminService {
                 .find(UserAccount.class, id)
                 .orElseThrow(() -> DomainException.missing("Account not found."));
         ensureNoActiveLeadership(id);
+        // Firebase is external to H2; on a later database failure, a retry treats missing UID as safe.
+        firebase.deleteUser(id);
         // Delete personal records together so no request or profile survives its account.
         repository.all(BuddyRequest.class).stream()
                 .filter(r -> involved(r, id))

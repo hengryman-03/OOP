@@ -1,10 +1,12 @@
 package studybuddy.backend.session.service;
 
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.auth.Actor;
 import studybuddy.backend.common.DomainException;
+import studybuddy.backend.group.model.GroupClosedEvent;
 import studybuddy.backend.group.model.GroupStatus;
 import studybuddy.backend.group.model.StudyGroup;
 import studybuddy.backend.group.service.StudyGroupService;
@@ -46,7 +48,7 @@ public class StudySessionService {
             throw DomainException.forbidden("You must be a member of this group.");
     }
 
-    private void validate(StudySession session) {
+    private void validate(StudySession session, StudyGroup group) {
         if (session.getSessionDate().isBefore(LocalDate.now()))
             throw new IllegalArgumentException("Choose a session date that hasn't passed yet.");
         if (!session.getStartTime().isBefore(session.getEndTime())
@@ -54,6 +56,30 @@ public class StudySessionService {
                 || session.getEndTime().getSecond() != 0)
             throw new IllegalArgumentException(
                     "The session needs an end time after its start, in whole minutes.");
+        int members = group.getMemberIds().size();
+        if (session.getMaxGroupSize() < members
+                || session.getMaxGroupSize() > group.getMaximumGroupSize())
+            throw new IllegalArgumentException(
+                    "Session size must be between the group's "
+                            + members
+                            + " current members and its maximum of "
+                            + group.getMaximumGroupSize()
+                            + ".");
+    }
+
+    private void deleteWithBookings(StudySession session) {
+        repository.all(RoomBooking.class).stream()
+                .filter(b -> b.getSessionId().equals(session.getId()))
+                .forEach(b -> repository.delete(RoomBooking.class, b.getId()));
+        repository.delete(StudySession.class, session.getId());
+    }
+
+    /** Runs in the closing transaction, so a closed group never keeps sessions or booked rooms. */
+    @EventListener
+    public void onGroupClosed(GroupClosedEvent event) {
+        repository.all(StudySession.class).stream()
+                .filter(s -> s.getGroupId().equals(event.groupId()))
+                .forEach(this::deleteWithBookings);
     }
 
     @Transactional
@@ -64,7 +90,7 @@ public class StudySessionService {
         requireManager(group, actor);
         if (group.getStatus() == GroupStatus.CLOSED)
             throw DomainException.conflict("This group is closed.");
-        validate(session);
+        validate(session, group);
         session.setId(UUID.randomUUID().toString());
         session.setPlannedBy(actor.id());
         session.setBookedRoomId(null);
@@ -107,9 +133,6 @@ public class StudySessionService {
         StudySession session = required(id);
         StudyGroup group = groups.required(session.getGroupId());
         requireManager(group, actor);
-        repository.all(RoomBooking.class).stream()
-                .filter(b -> b.getSessionId().equals(id))
-                .forEach(b -> repository.delete(RoomBooking.class, b.getId()));
-        repository.delete(StudySession.class, id);
+        deleteWithBookings(session);
     }
 }

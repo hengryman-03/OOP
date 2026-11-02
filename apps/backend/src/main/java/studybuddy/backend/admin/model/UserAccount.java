@@ -4,6 +4,9 @@ import jakarta.validation.constraints.*;
 
 public class UserAccount {
     private String id;
+    @Email
+    @Size(max = 254)
+    private String email;
     private java.time.Instant createdAt = java.time.Instant.now();
     private java.time.Instant lastActiveAt;
 
@@ -46,6 +49,14 @@ public class UserAccount {
 
     public String getId() {
         return id;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public void setId(String id) {

@@ -2,6 +2,9 @@ package studybuddy.backend.admin.controller;
 
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import org.springframework.web.bind.annotation.*;
 
@@ -35,6 +38,14 @@ public class AdminController {
     @PostMapping("/accounts")
     public UserAccount save(@Valid @RequestBody UserAccount a, HttpSession s) {
         return admin.saveAccount(a, sessions.actor(s));
+    }
+
+    public record StudentInvitation(@NotBlank @Size(max = 100) String name,
+                                    @NotBlank @Email @Size(max = 254) String email) {}
+
+    @PostMapping("/accounts/invitations")
+    public UserAccount invite(@Valid @RequestBody StudentInvitation invitation, HttpSession s) {
+        return admin.inviteStudent(invitation.name(), invitation.email(), sessions.actor(s));
     }
 
     @DeleteMapping("/accounts/{id}")

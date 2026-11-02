@@ -23,7 +23,7 @@ A live Firebase browser walkthrough was completed on 17 October 2026 using two d
 | Leader transfers or closes before quitting | Transfer-and-stay, transfer-and-leave, close-and-leave | Blocked exit/self-transfer/outsider tests; browser transfer |
 | Lone leader exits | Automatic closure and leader membership removal | Leader exit test |
 | Admin override | Admin group controls | Override/leadership protection test |
-| Create/update/delete user accounts | Students create login accounts through Firebase registration. Admin can update/delete existing accounts; admin creation is **not covered** under this self-registration policy. | API lifecycle test; live admin account table viewed after Firebase merge |
+| Create/update/delete user accounts | Students self-register or admins create Firebase-backed students by email; admins update existing accounts and delete their Firebase identity and application data. Administrators cannot create another administrator account. | Mocked Firebase API lifecycle tests; live invitation email and deletion remain to be checked with a team-controlled inbox |
 | Account status/basic usage | Status, profile completeness, connections/groups/pending counts, last sign-in | Admin account response tests; live browser table showed sign-in timestamps |
 | Configure matching criteria and importance | Nonnegative weights, zero disables, nonzero total | Validation and persistence tests |
 | Configure strategy | Balanced, availability-first, course-first and Pareto fronts | Ranking, API strategy and saved-config tests |

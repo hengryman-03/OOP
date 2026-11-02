@@ -3,14 +3,17 @@ package studybuddy.backend.auth;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
+import com.google.firebase.auth.AuthErrorCode;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
+import com.google.firebase.auth.UserRecord;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 
 import jakarta.annotation.PostConstruct;
 
@@ -53,9 +56,34 @@ public class FirebaseConfig {
     /** The controller only needs the verified UID; keep Firebase token objects inside this adapter. */
     public String verifiedUid(String idToken) {
         try {
-            return FirebaseAuth.getInstance().verifyIdToken(idToken).getUid();
+            return FirebaseAuth.getInstance().verifyIdToken(idToken, true).getUid();
         } catch (FirebaseAuthException e) {
             throw DomainException.forbidden("Invalid or expired Firebase token.");
+        }
+    }
+
+    /** Create a passwordless identity; the browser sends the Firebase password-set email. */
+    public String createStudent(String name, String email) {
+        try {
+            return FirebaseAuth.getInstance()
+                    .createUser(new UserRecord.CreateRequest().setEmail(email).setDisplayName(name))
+                    .getUid();
+        } catch (FirebaseAuthException e) {
+            if (e.getAuthErrorCode() == AuthErrorCode.EMAIL_ALREADY_EXISTS)
+                throw DomainException.conflict("This email already has a Firebase account.");
+            throw new DomainException(
+                    HttpStatus.BAD_GATEWAY, "Firebase could not create the student account.");
+        }
+    }
+
+    /** Missing users include seeded demo accounts and safe retries after partial deletion. */
+    public void deleteUser(String uid) {
+        try {
+            FirebaseAuth.getInstance().deleteUser(uid);
+        } catch (FirebaseAuthException e) {
+            if (e.getAuthErrorCode() == AuthErrorCode.USER_NOT_FOUND) return;
+            throw new DomainException(
+                    HttpStatus.BAD_GATEWAY, "Firebase could not delete the student identity.");
         }
     }
 }

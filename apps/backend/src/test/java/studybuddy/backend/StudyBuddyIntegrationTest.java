@@ -2,6 +2,9 @@ package studybuddy.backend;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -137,6 +140,9 @@ class StudyBuddyIntegrationTest {
         assertEquals(50, call(student, get("/api/students"), 200).size());
         assertEquals(10, call(student, get("/api/students/courses"), 200).size());
         call(student, get("/api/admin/accounts"), 403);
+        call(student, post("/api/admin/accounts/invitations"),
+                java.util.Map.of("name", "Someone", "email", "someone@example.com"), 403);
+        verify(firebaseConfig, never()).createStudent(anyString(), anyString());
         call(student, get("/api/admin/matching-config"), 403);
         call(student, get("/api/connections/students/S002"), 403);
         call(student, get("/api/students/S002/matches"), 403);
@@ -476,21 +482,47 @@ class StudyBuddyIntegrationTest {
         call(admin, post("/api/admin/accounts"), account, 200);
         call(student, get("/api/students"), 200);
         call(admin, delete("/api/admin/accounts/" + id), 200);
+        verify(firebaseConfig).deleteUser(id);
         call(student, get("/api/students"), 401);
         assertTrue(repository.find(StudentProfile.class, id).isEmpty());
         assertEquals(0, call(login("S004"), get("/api/connections/students/S004"), 200).size());
-        JsonNode reRegistered =
-                call(
-                        admin,
-                        post("/api/session/signup"),
-                        java.util.Map.of("idToken", id, "name", "Returning learner"),
-                        200);
-        assertEquals(id, reRegistered.get("id").asText());
+        when(firebaseConfig.verifiedUid(id))
+                .thenThrow(DomainException.forbidden("Invalid or expired Firebase token."));
+        call(admin, post("/api/session/signup"),
+                java.util.Map.of("idToken", id, "name", "Returning learner"), 403);
         assertTrue(repository.find(StudentProfile.class, id).isEmpty());
     }
 
     @Test
-    void administratorsManageSelfRegisteredAccountsRatherThanCreatingUnusableRecords() throws Exception {
+    void administratorsInviteFirebaseStudentsAndKeepEmailOnUpdate() throws Exception {
+        var admin = login("ADMIN001");
+        when(firebaseConfig.createStudent("Invited Learner", "invited@example.com"))
+                .thenReturn("invited-uid");
+        JsonNode created = call(admin, post("/api/admin/accounts/invitations"),
+                java.util.Map.of("name", " Invited Learner ", "email", "Invited@Example.com"), 200);
+        assertEquals("invited-uid", created.get("id").asText());
+        assertEquals("invited@example.com", created.get("email").asText());
+        assertEquals("invited-uid", call(login("invited-uid"), get("/api/session"), 200).get("id").asText());
+        ObjectNode edited = (ObjectNode) created.deepCopy();
+        edited.remove("email");
+        edited.put("name", "Invited Student");
+        assertEquals("invited@example.com",
+                call(admin, post("/api/admin/accounts"), edited, 200).get("email").asText());
+        call(admin, delete("/api/admin/accounts/invited-uid"), 200);
+        verify(firebaseConfig).deleteUser("invited-uid");
+    }
+
+    @Test
+    void firebaseDeletionFailurePreservesApplicationAccount() throws Exception {
+        var admin = login("ADMIN001");
+        doThrow(new DomainException(org.springframework.http.HttpStatus.BAD_GATEWAY, "Firebase unavailable."))
+                .when(firebaseConfig).deleteUser("S050");
+        call(admin, delete("/api/admin/accounts/S050"), 502);
+        assertTrue(repository.find(studybuddy.backend.admin.model.UserAccount.class, "S050").isPresent());
+    }
+
+    @Test
+    void administratorsCannotCreateAccountsThroughTheUpdateEndpoint() throws Exception {
         var admin = login("ADMIN001");
         call(
                 admin,
@@ -567,6 +599,93 @@ class StudyBuddyIntegrationTest {
                 anotherLeader,
                 post("/api/venues/bookings?sessionId=" + competingSessionId + "&roomId=" + roomId),
                 200);
+    }
+
+    String nextMonday() {
+        return java.time.LocalDate.now()
+                .with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.MONDAY))
+                .toString();
+    }
+
+    String planSession(MockHttpSession leader, String group, String start, String end, int size)
+            throws Exception {
+        return call(
+                        leader,
+                        post("/api/sessions"),
+                        java.util.Map.of(
+                                "groupId", group,
+                                "sessionDate", nextMonday(),
+                                "startTime", start,
+                                "endTime", end,
+                                "maxGroupSize", size),
+                        200)
+                .get("id")
+                .asText();
+    }
+
+    void accept(MockHttpSession leader, MockHttpSession student, String group) throws Exception {
+        call(leader, post("/api/groups/join-requests/" + join(student, group) + "/decision?decision=ACCEPTED"), 200);
+    }
+
+    @Test
+    void closingGroupCancelsItsSessionsAndReleasesTheirRooms() throws Exception {
+        var leader = login("S001");
+        var otherLeader = login("S002");
+        String group = newGroup(leader, 3), session = planSession(leader, group, "10:00", "11:00", 2);
+        call(leader, post("/api/venues/bookings?sessionId=" + session + "&roomId=R001"), 200);
+        call(leader, post("/api/groups/" + group + "/close"), 200);
+        assertEquals(0, call(leader, get("/api/sessions?groupId=" + group), 200).size());
+        call(leader, post("/api/venues/bookings?sessionId=" + session + "&roomId=R002"), 404);
+        String competing = planSession(otherLeader, "G002", "10:00", "11:00", 2);
+        call(otherLeader, post("/api/venues/bookings?sessionId=" + competing + "&roomId=R001"), 200);
+
+        String quitting = newGroup(leader, 3), lone = planSession(leader, quitting, "12:00", "13:00", 2);
+        call(leader, post("/api/groups/" + quitting + "/leader-quits?closeGroup=true"), 200);
+        assertTrue(repository.find(studybuddy.backend.session.model.StudySession.class, lone).isEmpty());
+    }
+
+    @Test
+    void roomsCannotBeBookedForAClosedGroup() throws Exception {
+        var leader = login("S001");
+        String group = newGroup(leader, 3), session = planSession(leader, group, "10:00", "11:00", 2);
+        // Sessions saved before closure cleanup existed can still belong to a closed group.
+        var stored = repository.find(studybuddy.backend.session.model.StudySession.class, session).orElseThrow();
+        var closed = repository.find(studybuddy.backend.group.model.StudyGroup.class, group).orElseThrow();
+        closed.setStatus(studybuddy.backend.group.model.GroupStatus.CLOSED);
+        repository.save(group, closed);
+        repository.save(session, stored);
+        call(leader, post("/api/venues/bookings?sessionId=" + session + "&roomId=R001"), 409);
+        call(leader, get("/api/venues/recommendations?sessionId=" + session), 409);
+    }
+
+    @Test
+    void sessionSizeCoversCurrentMembersWithinTheGroupLimit() throws Exception {
+        var leader = login("S001");
+        var b = login("S002");
+        var c = login("S003");
+        String group = newGroup(leader, 6);
+        accept(leader, b, group);
+        accept(leader, c, group);
+        call(leader, post("/api/sessions"),
+                java.util.Map.of("groupId", group, "sessionDate", nextMonday(),
+                        "startTime", "10:00", "endTime", "11:00", "maxGroupSize", 2), 400);
+        call(leader, post("/api/sessions"),
+                java.util.Map.of("groupId", group, "sessionDate", nextMonday(),
+                        "startTime", "10:00", "endTime", "11:00", "maxGroupSize", 7), 400);
+        String session = planSession(leader, group, "10:00", "11:00", 3);
+        accept(leader, login("S004"), group);
+        accept(leader, login("S005"), group);
+        // R003 has 4 seats; the group grew to 5 members after the session was planned.
+        call(leader, post("/api/venues/bookings?sessionId=" + session + "&roomId=R003"), 409);
+        for (JsonNode room : call(leader, get("/api/venues/recommendations?sessionId=" + session), 200))
+            assertTrue(room.get("capacity").asInt() >= 5);
+    }
+
+    @Test
+    void unknownRoutesAndUnsupportedMethodsAreClientErrors() throws Exception {
+        var student = login("S001");
+        call(student, get("/api/does-not-exist"), 404);
+        call(student, delete("/api/students"), 405);
     }
 
     @Test
