@@ -602,6 +602,13 @@ class StudyBuddyIntegrationTest {
     }
 
     @Test
+    void unknownRoutesAndUnsupportedMethodsAreClientErrors() throws Exception {
+        var student = login("S001");
+        call(student, get("/api/does-not-exist"), 404);
+        call(student, delete("/api/students"), 405);
+    }
+
+    @Test
     void corsAllowsLocalFrontendButRejectsOtherOrigins() throws Exception {
         mvc.perform(
                         post("/api/session/login")
