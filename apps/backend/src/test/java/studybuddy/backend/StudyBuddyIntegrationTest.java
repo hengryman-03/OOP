@@ -601,6 +601,86 @@ class StudyBuddyIntegrationTest {
                 200);
     }
 
+    String nextMonday() {
+        return java.time.LocalDate.now()
+                .with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.MONDAY))
+                .toString();
+    }
+
+    String planSession(MockHttpSession leader, String group, String start, String end, int size)
+            throws Exception {
+        return call(
+                        leader,
+                        post("/api/sessions"),
+                        java.util.Map.of(
+                                "groupId", group,
+                                "sessionDate", nextMonday(),
+                                "startTime", start,
+                                "endTime", end,
+                                "maxGroupSize", size),
+                        200)
+                .get("id")
+                .asText();
+    }
+
+    void accept(MockHttpSession leader, MockHttpSession student, String group) throws Exception {
+        call(leader, post("/api/groups/join-requests/" + join(student, group) + "/decision?decision=ACCEPTED"), 200);
+    }
+
+    @Test
+    void closingGroupCancelsItsSessionsAndReleasesTheirRooms() throws Exception {
+        var leader = login("S001");
+        var otherLeader = login("S002");
+        String group = newGroup(leader, 3), session = planSession(leader, group, "10:00", "11:00", 2);
+        call(leader, post("/api/venues/bookings?sessionId=" + session + "&roomId=R001"), 200);
+        call(leader, post("/api/groups/" + group + "/close"), 200);
+        assertEquals(0, call(leader, get("/api/sessions?groupId=" + group), 200).size());
+        call(leader, post("/api/venues/bookings?sessionId=" + session + "&roomId=R002"), 404);
+        String competing = planSession(otherLeader, "G002", "10:00", "11:00", 2);
+        call(otherLeader, post("/api/venues/bookings?sessionId=" + competing + "&roomId=R001"), 200);
+
+        String quitting = newGroup(leader, 3), lone = planSession(leader, quitting, "12:00", "13:00", 2);
+        call(leader, post("/api/groups/" + quitting + "/leader-quits?closeGroup=true"), 200);
+        assertTrue(repository.find(studybuddy.backend.session.model.StudySession.class, lone).isEmpty());
+    }
+
+    @Test
+    void roomsCannotBeBookedForAClosedGroup() throws Exception {
+        var leader = login("S001");
+        String group = newGroup(leader, 3), session = planSession(leader, group, "10:00", "11:00", 2);
+        // Sessions saved before closure cleanup existed can still belong to a closed group.
+        var stored = repository.find(studybuddy.backend.session.model.StudySession.class, session).orElseThrow();
+        var closed = repository.find(studybuddy.backend.group.model.StudyGroup.class, group).orElseThrow();
+        closed.setStatus(studybuddy.backend.group.model.GroupStatus.CLOSED);
+        repository.save(group, closed);
+        repository.save(session, stored);
+        call(leader, post("/api/venues/bookings?sessionId=" + session + "&roomId=R001"), 409);
+        call(leader, get("/api/venues/recommendations?sessionId=" + session), 409);
+    }
+
+    @Test
+    void sessionSizeCoversCurrentMembersWithinTheGroupLimit() throws Exception {
+        var leader = login("S001");
+        var b = login("S002");
+        var c = login("S003");
+        String group = newGroup(leader, 6);
+        accept(leader, b, group);
+        accept(leader, c, group);
+        call(leader, post("/api/sessions"),
+                java.util.Map.of("groupId", group, "sessionDate", nextMonday(),
+                        "startTime", "10:00", "endTime", "11:00", "maxGroupSize", 2), 400);
+        call(leader, post("/api/sessions"),
+                java.util.Map.of("groupId", group, "sessionDate", nextMonday(),
+                        "startTime", "10:00", "endTime", "11:00", "maxGroupSize", 7), 400);
+        String session = planSession(leader, group, "10:00", "11:00", 3);
+        accept(leader, login("S004"), group);
+        accept(leader, login("S005"), group);
+        // R003 has 4 seats; the group grew to 5 members after the session was planned.
+        call(leader, post("/api/venues/bookings?sessionId=" + session + "&roomId=R003"), 409);
+        for (JsonNode room : call(leader, get("/api/venues/recommendations?sessionId=" + session), 200))
+            assertTrue(room.get("capacity").asInt() >= 5);
+    }
+
     @Test
     void unknownRoutesAndUnsupportedMethodsAreClientErrors() throws Exception {
         var student = login("S001");

@@ -331,7 +331,13 @@ export function GroupsPanel({
               {!planningSession ? (
                 <button
                   className="button secondary"
-                  onClick={() => setPlanningSession(true)}
+                  onClick={() => {
+                    setSessionForm({
+                      ...emptySessionForm,
+                      maxGroupSize: Math.max(2, selected.memberIds.length),
+                    });
+                    setPlanningSession(true);
+                  }}
                 >
                   + Plan a session
                 </button>
@@ -403,8 +409,8 @@ export function GroupsPanel({
                     <input
                       type="number"
                       required
-                      min={2}
-                      max={20}
+                      min={Math.max(2, selected.memberIds.length)}
+                      max={selected.maximumGroupSize}
                       value={sessionForm.maxGroupSize}
                       onChange={(e) =>
                         setSessionForm((f) => ({

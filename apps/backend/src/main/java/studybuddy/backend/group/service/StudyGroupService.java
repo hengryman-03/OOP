@@ -1,5 +1,6 @@
 package studybuddy.backend.group.service;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,10 +19,13 @@ import java.util.UUID;
 public class StudyGroupService {
     private final StudyRepository repository;
     private final StudentService students;
+    private final ApplicationEventPublisher events;
 
-    public StudyGroupService(StudyRepository repository, StudentService students) {
+    public StudyGroupService(
+            StudyRepository repository, StudentService students, ApplicationEventPublisher events) {
         this.repository = repository;
         this.students = students;
+        this.events = events;
     }
 
     public List<StudyGroup> listGroups() {
@@ -190,6 +194,7 @@ public class StudyGroupService {
                             r.setStatus(RequestStatus.DECLINED);
                             repository.save(r.getId(), r);
                         });
+        events.publishEvent(new GroupClosedEvent(group.getId()));
     }
 
     @Transactional
