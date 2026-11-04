@@ -123,9 +123,9 @@ For the algorithm concepts, trade-offs and presentation example, see [matching a
 
 ## Study sessions and venue booking
 
-Group leaders (or an administrator) plan study sessions for an active group: a date that has not passed, a start and end time in whole minutes, and a session size. Rooms are seeded demo data, each with a capacity, features (whiteboard, projector, power sockets) and weekly opening hours. The **Venue** page lists the signed-in student's sessions, recommends rooms for one and books the chosen room.
+The group leader plans study sessions for an active group: a date that has not passed, a start and end time in whole minutes, and a session size. Rooms are seeded demo data, each with a capacity, features (whiteboard, projector, power sockets) and weekly opening hours. The **Venue** page lists the signed-in student's sessions, recommends rooms for one and books the chosen room.
 
-- **Who can book.** The leader, any member of the group, or an administrator can book or release a room, so a member can help when the leader needs it. Planning or cancelling a session is leader/administrator only. Booking again for the same session replaces its earlier booking.
+- **Who can book.** The leader, any member of the group, or an administrator can book or release a room, so a member can help when the leader needs it. Only the group leader can plan a session. The leader or an administrator can cancel one. Booking again for the same session replaces its earlier booking.
 - **Recommendations.** Rooms are filtered by building and features, must be open for the whole session, must not clash with another booking and must seat the group; results are ordered smallest suitable room first.
 - **Room size.** The room must seat the larger of the session size and the group's current member count. The session size cannot be lower than the current members or above the group's maximum.
 - **Closed groups.** Rooms cannot be booked or recommended for a closed group. Closing a group (including the leader leaving and closing it) deletes its sessions and releases their rooms in the same transaction.
@@ -194,7 +194,7 @@ Every `/api` route except student login/sign-up and administrator login requires
 | POST | `/api/groups/{id}/leader-quits?replacementLeaderId=...` | Transfer and leave; alone means close |
 | POST | `/api/groups/{id}/leader-quits?closeGroup=true` | Close and leave |
 | POST | `/api/groups/{id}/close` | Close; members remain in historical record |
-| POST | `/api/sessions` | Plan a session `{groupId, sessionDate, startTime, endTime, maxGroupSize}` (leader/administrator) |
+| POST | `/api/sessions` | Plan a session `{groupId, sessionDate, startTime, endTime, maxGroupSize}` (leader) |
 | GET | `/api/sessions?groupId=...` | Sessions of a group (members) |
 | GET | `/api/sessions/mine` | Bookable sessions across the student's active groups |
 | POST | `/api/sessions/{id}/cancel` | Cancel a session and release its room (leader/administrator) |
