@@ -1,11 +1,14 @@
 package studybuddy.backend.venue.service;
 
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.auth.Actor;
 import studybuddy.backend.common.DomainException;
 import studybuddy.backend.group.model.GroupStatus;
+import studybuddy.backend.group.model.MemberJoiningEvent;
+import studybuddy.backend.group.model.MemberLeftEvent;
 import studybuddy.backend.group.model.StudyGroup;
 import studybuddy.backend.group.service.StudyGroupService;
 import studybuddy.backend.persistence.StudyRepository;
@@ -65,6 +68,42 @@ public class VenueService {
         return repository.all(RoomBooking.class).stream()
                 .filter(b -> b.getRoomId().equals(room.getId()) && b.getDate().equals(date))
                 .anyMatch(b -> b.getStartTime().isBefore(end) && start.isBefore(b.getEndTime()));
+    }
+
+    /**
+     * A member joining must still fit every room the group has booked for today or later. The
+     * exception reaches the publisher, so the join is rejected and its transaction rolls back.
+     */
+    @EventListener
+    public void onMemberJoining(MemberJoiningEvent event) {
+        repository.all(RoomBooking.class).stream()
+                .filter(b -> b.getGroupId().equals(event.groupId()))
+                .filter(b -> !b.getDate().isBefore(LocalDate.now()))
+                .map(b -> repository.find(Room.class, b.getRoomId()))
+                .flatMap(java.util.Optional::stream)
+                .filter(room -> room.getCapacity() < event.newMemberCount())
+                .mapToInt(Room::getCapacity)
+                .min()
+                .ifPresent(
+                        seats -> {
+                            throw DomainException.conflict(
+                                    "A booked room for this group only seats "
+                                            + seats
+                                            + ". Release or rebook it before adding another member.");
+                        });
+    }
+
+    /** Bookings made by a departing member pass to the group's current leader. */
+    @EventListener
+    public void onMemberLeft(MemberLeftEvent event) {
+        repository.all(RoomBooking.class).stream()
+                .filter(b -> b.getGroupId().equals(event.groupId()))
+                .filter(b -> event.studentId().equals(b.getBookedBy()))
+                .forEach(
+                        b -> {
+                            b.setBookedBy(event.leaderId());
+                            repository.save(b.getId(), b);
+                        });
     }
 
     public List<Room> listRooms() {
