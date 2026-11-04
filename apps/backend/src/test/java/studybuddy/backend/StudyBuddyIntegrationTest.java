@@ -736,6 +736,37 @@ class StudyBuddyIntegrationTest {
     }
 
     @Test
+    void leaderCanEditASessionAndRoomIsKeptOnlyWhileItStillFits() throws Exception {
+        var leader = login("S001");
+        var member = login("S004");
+        BookedGroup booked = groupWithBookedRoom(leader, member);
+        String url = "/api/sessions/" + booked.session();
+        java.util.function.BiFunction<String, Integer, java.util.Map<String, Object>> body =
+                (start, size) ->
+                        java.util.Map.of(
+                                "groupId", booked.group(),
+                                "sessionDate", nextMonday(),
+                                "startTime", start,
+                                "endTime", start.equals("10:00") ? "11:00" : "12:00",
+                                "maxGroupSize", size);
+        call(member, put(url), body.apply("10:00", 3), 403);
+        // Same slot and a size the room still seats: the booking stays.
+        JsonNode kept = call(leader, put(url), body.apply("10:00", 3), 200);
+        assertEquals(booked.room(), kept.get("bookedRoomId").asText());
+        // Size below the current members is still rejected.
+        call(leader, put(url), body.apply("10:00", 2), 400);
+        // Moving the time releases the booking, so the old slot is free again.
+        JsonNode moved = call(leader, put(url), body.apply("11:00", 3), 200);
+        assertTrue(moved.get("bookedRoomId").isNull());
+        assertEquals("11:00:00", moved.get("startTime").asText());
+        assertTrue(
+                repository.all(studybuddy.backend.venue.model.RoomBooking.class).stream()
+                        .noneMatch(b -> b.getSessionId().equals(booked.session())));
+        call(leader, post("/api/groups/" + booked.group() + "/close"), 200);
+        call(leader, put(url), body.apply("11:00", 3), 404);
+    }
+
+    @Test
     void roomsCannotBeBookedForAClosedGroup() throws Exception {
         var leader = login("S001");
         String group = newGroup(leader, 3), session = planSession(leader, group, "10:00", "11:00", 2);

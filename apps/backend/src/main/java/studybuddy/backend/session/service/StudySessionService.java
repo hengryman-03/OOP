@@ -12,6 +12,7 @@ import studybuddy.backend.group.model.StudyGroup;
 import studybuddy.backend.group.service.StudyGroupService;
 import studybuddy.backend.persistence.StudyRepository;
 import studybuddy.backend.session.model.StudySession;
+import studybuddy.backend.venue.model.Room;
 import studybuddy.backend.venue.model.RoomBooking;
 
 import java.time.LocalDate;
@@ -94,6 +95,44 @@ public class StudySessionService {
         session.setId(UUID.randomUUID().toString());
         session.setPlannedBy(actor.id());
         session.setBookedRoomId(null);
+        return repository.save(session.getId(), session);
+    }
+
+    /**
+     * The booking survives an edit only if the date and time are unchanged and the booked room still
+     * seats the session; otherwise it is released so a stale room is never left reserved.
+     */
+    @Transactional
+    public StudySession updateSession(String id, StudySession updated, Actor actor) {
+        repository.lock();
+        StudySession session = required(id);
+        StudyGroup group = groups.required(session.getGroupId());
+        requireManager(group, actor);
+        if (group.getStatus() == GroupStatus.CLOSED)
+            throw DomainException.conflict("This group is closed.");
+        validate(updated, group);
+        boolean rescheduled =
+                !session.getSessionDate().equals(updated.getSessionDate())
+                        || !session.getStartTime().equals(updated.getStartTime())
+                        || !session.getEndTime().equals(updated.getEndTime());
+        if (session.getBookedRoomId() != null) {
+            boolean tooSmall =
+                    repository
+                            .find(Room.class, session.getBookedRoomId())
+                            .map(room -> room.getCapacity() < updated.getMaxGroupSize())
+                            .orElse(true);
+            if (rescheduled || tooSmall) {
+                repository.all(RoomBooking.class).stream()
+                        .filter(b -> b.getSessionId().equals(session.getId()))
+                        .forEach(b -> repository.delete(RoomBooking.class, b.getId()));
+                session.setBookedRoomId(null);
+            }
+        }
+        session.setTitle(updated.getTitle());
+        session.setSessionDate(updated.getSessionDate());
+        session.setStartTime(updated.getStartTime());
+        session.setEndTime(updated.getEndTime());
+        session.setMaxGroupSize(updated.getMaxGroupSize());
         return repository.save(session.getId(), session);
     }
 

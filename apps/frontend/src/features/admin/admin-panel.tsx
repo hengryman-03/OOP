@@ -11,6 +11,7 @@ import {
   MatchingConfig,
   label,
 } from '@/lib/study-buddy-types';
+import { formatInstantDateTime } from '@/lib/dates';
 import { Badge, Field, Modal, useAction } from '@/components/ui';
 
 export function AdminPanel({
@@ -415,7 +416,7 @@ export function AdminPanel({
                       </td>
                       <td>
                         {a.lastActiveAt
-                          ? new Date(a.lastActiveAt).toLocaleString('en-SG')
+                          ? formatInstantDateTime(a.lastActiveAt)
                           : 'Not yet'}
                       </td>
                       <td>

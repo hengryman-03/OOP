@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/study-buddy-api';
+import { formatInstantDate } from '@/lib/dates';
 import { BuddyRequest, StudentProfile, label } from '@/lib/study-buddy-types';
 import { Avatar, Badge, Empty, Times, useAction } from '@/components/ui';
 
@@ -81,7 +82,7 @@ export function ConnectionsPanel({
                     <h3>{name(other)}</h3>
                     <p>
                       {r.senderId === id ? 'Sent' : 'Received'}{' '}
-                      {new Date(r.createdAt).toLocaleDateString('en-SG')}
+                      {formatInstantDate(r.createdAt)}
                     </p>
                   </div>
                 </div>

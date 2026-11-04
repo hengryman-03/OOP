@@ -8,6 +8,7 @@ import {
   StudyGroup,
   StudySession,
 } from '@/lib/study-buddy-types';
+import { formatDate } from '@/lib/dates';
 import { Badge, Empty, Field, Modal, Times, useAction } from '@/components/ui';
 
 export function VenuesPanel({
@@ -90,7 +91,7 @@ export function VenuesPanel({
               <option value="">Choose a session</option>
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {groupName(s.groupId)} · {s.sessionDate}{' '}
+                  {groupName(s.groupId)} · {formatDate(s.sessionDate)}{' '}
                   {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)}
                 </option>
               ))}
@@ -216,7 +217,7 @@ export function VenuesPanel({
         <Modal title="Confirm booking" onClose={() => setConfirming(null)}>
           <p>
             Book <strong>{confirming.building} · {confirming.roomNumber}</strong>{' '}
-            for {groupName(session.groupId)} on {session.sessionDate},{' '}
+            for {groupName(session.groupId)} on {formatDate(session.sessionDate)},{' '}
             {session.startTime.slice(0, 5)}–{session.endTime.slice(0, 5)}?
           </p>
           <div className="actions">

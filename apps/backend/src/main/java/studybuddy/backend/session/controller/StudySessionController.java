@@ -28,6 +28,12 @@ public class StudySessionController {
         return sessions.createSession(s, auth.actor(session));
     }
 
+    @PutMapping("/{id}")
+    public StudySession update(
+            @PathVariable String id, @Valid @RequestBody StudySession s, HttpSession session) {
+        return sessions.updateSession(id, s, auth.actor(session));
+    }
+
     @GetMapping
     public List<StudySession> forGroup(@RequestParam String groupId, HttpSession session) {
         return sessions.forGroup(groupId, auth.actor(session));

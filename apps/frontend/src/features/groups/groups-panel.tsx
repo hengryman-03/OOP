@@ -13,6 +13,7 @@ import {
   label,
 } from '@/lib/study-buddy-types';
 import { Avatar, Badge, Empty, Field, Times, useAction } from '@/components/ui';
+import { formatDate, parseDate } from '@/lib/dates';
 import { GroupEditor } from './group-editor';
 
 const emptySessionForm = {
@@ -47,7 +48,8 @@ export function GroupsPanel({
   const [selectedId, setSelectedId] = useState(''),
     [replacement, setReplacement] = useState('');
   const [planningSession, setPlanningSession] = useState(false),
-    [sessionForm, setSessionForm] = useState(emptySessionForm);
+    [sessionForm, setSessionForm] = useState(emptySessionForm),
+    [editingSessionId, setEditingSessionId] = useState('');
   const action = useAction(refresh),
     admin = account.role === 'SYSTEM_ADMINISTRATOR';
   const selected = groups.find((g) => g.id === selectedId);
@@ -291,8 +293,9 @@ export function GroupsPanel({
                     <div key={s.id}>
                       <div className="person-heading">
                         <span>
-                          {s.sessionDate} · {s.startTime.slice(0, 5)}–
-                          {s.endTime.slice(0, 5)} · up to {s.maxGroupSize}
+                          {formatDate(s.sessionDate)} ·{' '}
+                          {s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)} · up
+                          to {s.maxGroupSize}
                         </span>
                         {room ? (
                           <Badge>
@@ -303,23 +306,43 @@ export function GroupsPanel({
                         )}
                       </div>
                       {manage(selected) && (
-                        <button
-                          className="button ghost"
-                          disabled={action.busy}
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                'Cancel this session? Any room booking will be released.',
+                        <div className="actions">
+                          {selected.status === 'ACTIVE' && (
+                            <button
+                              className="button secondary"
+                              disabled={action.busy}
+                              onClick={() => {
+                                setSessionForm({
+                                  sessionDate: formatDate(s.sessionDate),
+                                  startTime: s.startTime.slice(0, 5),
+                                  endTime: s.endTime.slice(0, 5),
+                                  maxGroupSize: s.maxGroupSize,
+                                });
+                                setEditingSessionId(s.id ?? '');
+                                setPlanningSession(true);
+                              }}
+                            >
+                              Edit
+                            </button>
+                          )}
+                          <button
+                            className="button danger"
+                            disabled={action.busy}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  'Cancel this session? Any room booking will be released.',
+                                )
                               )
-                            )
-                              void action.run(
-                                () => api(`/sessions/${s.id}/cancel`, 'POST'),
-                                'Session cancelled.',
-                              );
-                          }}
-                        >
-                          Cancel
-                        </button>
+                                void action.run(
+                                  () => api(`/sessions/${s.id}/cancel`, 'POST'),
+                                  'Session cancelled.',
+                                );
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -332,6 +355,7 @@ export function GroupsPanel({
                 <button
                   className="button secondary"
                   onClick={() => {
+                    setEditingSessionId('');
                     setSessionForm({
                       ...emptySessionForm,
                       maxGroupSize: Math.max(2, selected.memberIds.length),
@@ -346,21 +370,52 @@ export function GroupsPanel({
                   className="time-filter"
                   onSubmit={(e) => {
                     e.preventDefault();
+                    const editing = sessions.find(
+                      (x) => x.id === editingSessionId,
+                    );
+                    const date = parseDate(sessionForm.sessionDate);
+                    const bookedRoom = rooms.find(
+                      (r) => r.id === editing?.bookedRoomId,
+                    );
+                    const releasesRoom =
+                      !!editing &&
+                      !!bookedRoom &&
+                      (date !== editing.sessionDate ||
+                        sessionForm.startTime !==
+                          editing.startTime.slice(0, 5) ||
+                        sessionForm.endTime !== editing.endTime.slice(0, 5) ||
+                        bookedRoom.capacity < sessionForm.maxGroupSize);
+                    if (
+                      releasesRoom &&
+                      !window.confirm(
+                        'Changing the date, time or size so the booked room no longer fits will release the room booking. Continue?',
+                      )
+                    )
+                      return;
                     void action
                       .run(
-                        () =>
-                          api('/sessions', 'POST', {
+                        async () => {
+                          if (!date)
+                            throw new Error('Enter the date as dd/mm/yyyy.');
+                          const body = {
                             groupId: selected.id,
-                            sessionDate: sessionForm.sessionDate,
+                            sessionDate: date,
                             startTime: sessionForm.startTime,
                             endTime: sessionForm.endTime,
                             maxGroupSize: sessionForm.maxGroupSize,
-                          }),
-                        'Session planned.',
+                          };
+                          return editingSessionId
+                            ? api(`/sessions/${editingSessionId}`, 'PUT', body)
+                            : api('/sessions', 'POST', body);
+                        },
+                        editingSessionId
+                          ? 'Session updated.'
+                          : 'Session planned.',
                       )
                       .then((ok) => {
                         if (ok) {
                           setPlanningSession(false);
+                          setEditingSessionId('');
                           setSessionForm(emptySessionForm);
                         }
                       });
@@ -368,7 +423,11 @@ export function GroupsPanel({
                 >
                   <Field label="Date">
                     <input
-                      type="date"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="dd/mm/yyyy"
+                      pattern="\d{1,2}/\d{1,2}/\d{4}"
+                      title="Use the format dd/mm/yyyy"
                       required
                       value={sessionForm.sessionDate}
                       onChange={(e) =>
@@ -422,13 +481,14 @@ export function GroupsPanel({
                   </Field>
                   <div className="actions">
                     <button className="button" disabled={action.busy}>
-                      Save session
+                      {editingSessionId ? 'Save changes' : 'Save session'}
                     </button>
                     <button
                       type="button"
                       className="button ghost"
                       onClick={() => {
                         setPlanningSession(false);
+                        setEditingSessionId('');
                         setSessionForm(emptySessionForm);
                       }}
                     >
