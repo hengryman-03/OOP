@@ -716,6 +716,25 @@ class StudyBuddyIntegrationTest {
     }
 
     @Test
+    void bookingsMadeByAQuittingLeaderPassToTheReplacement() throws Exception {
+        var leader = login("S001");
+        BookedGroup booked = groupWithBookedRoom(leader, leader);
+        var booking =
+                repository.all(studybuddy.backend.venue.model.RoomBooking.class).stream()
+                        .filter(b -> b.getSessionId().equals(booked.session()))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals("S001", booking.getBookedBy());
+        call(leader, post("/api/groups/" + booked.group() + "/leader-quits?replacementLeaderId=S004"), 200);
+        assertEquals(
+                "S004",
+                repository
+                        .find(studybuddy.backend.venue.model.RoomBooking.class, booking.getId())
+                        .orElseThrow()
+                        .getBookedBy());
+    }
+
+    @Test
     void bookingsMadeByADeletedAccountPassToTheLeader() throws Exception {
         var leader = login("S001");
         var admin = login("ADMIN001");

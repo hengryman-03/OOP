@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import studybuddy.backend.admin.model.UserAccount;
 import studybuddy.backend.admin.service.AdminService;
@@ -26,7 +27,7 @@ class AdminServiceTest {
 
         assertThrows(
                 IllegalStateException.class,
-                () -> new AdminService(repository, firebase)
+                () -> new AdminService(repository, firebase, mock(ApplicationEventPublisher.class))
                         .inviteStudent(
                                 "Invited Student",
                                 "student@example.com",
