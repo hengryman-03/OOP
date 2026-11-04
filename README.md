@@ -45,6 +45,7 @@ The database seeds 50 fictional student profiles and 10 courses for matching dem
 - Public profiles hide contacts. An accepted buddy request reveals contacts to both participants; ending it revokes contact access. Directory and matching responses always omit contacts.
 - Buddy requests with optional messages, inbox/sent/history views, accept/decline, active connections, and ending connections. Self-requests, duplicate/reverse pending requests, forged senders, and invalid status transitions are rejected.
 - Group creation/editing/closure, course discovery, membership requests and decisions, capacity enforcement, removal, ordinary member exit, leadership transfer, and the team-added leader exit rule.
+- Study sessions and room booking: group leaders plan sessions, and any group member can book or release a suitable room (see [Study sessions and venue booking](#study-sessions-and-venue-booking)).
 - Administrator student invitations, name/status updates and deletion with Firebase identity and related personal-record cleanup, profile-completion status, active-buddy counts, group counts, pending-request counts and last sign-in time.
 - Administrator strategy/weight/result-limit configuration saved immediately to the database. A weight of zero disables that criterion.
 - Seed data installed once: 10 courses, 50 fictional student profiles and student accounts, 1 administrator, and 3 study groups. Deleted seed accounts do not reappear at restart.
@@ -64,6 +65,8 @@ apps/
       matching/     service, model, config: scoring and saved configuration
       connection/   controller, service, model: buddy-request lifecycle
       group/        controller, service, model: membership and leadership rules
+      session/      controller, service, model: group study sessions planned by the leader
+      venue/        controller, service, model: rooms, recommendations and room bookings
       admin/        controller, service, model: account lifecycle and usage
       auth/         Firebase token verification, sessions, trusted Actor, API interception
       persistence/  H2 repository and one-time deterministic seed data
@@ -117,6 +120,18 @@ Effective weights are normalized to exactly 100 using the largest-remainder meth
 Example: with default balanced weights, exact preferred-course alignment, 60 shared minutes out of 120, compatible mode, the same goal, and equal compatible group sizes gives `40 + 13 + 15 + 15 + 5 = 88`.
 
 For the algorithm concepts, trade-offs and presentation example, see [matching algorithms](docs/matching-algorithms.md).
+
+## Study sessions and venue booking
+
+Group leaders (or an administrator) plan study sessions for an active group: a date that has not passed, a start and end time in whole minutes, and a session size. Rooms are seeded demo data, each with a capacity, features (whiteboard, projector, power sockets) and weekly opening hours. The **Venue** page lists the signed-in student's sessions, recommends rooms for one and books the chosen room.
+
+- **Who can book.** The leader, any member of the group, or an administrator can book or release a room, so a member can help when the leader needs it. Planning or cancelling a session is leader/administrator only. Booking again for the same session replaces its earlier booking.
+- **Recommendations.** Rooms are filtered by building and features, must be open for the whole session, must not clash with another booking and must seat the group; results are ordered smallest suitable room first.
+- **Room size.** The room must seat the larger of the session size and the group's current member count. The session size cannot be lower than the current members or above the group's maximum.
+- **Closed groups.** Rooms cannot be booked or recommended for a closed group. Closing a group (including the leader leaving and closing it) deletes its sessions and releases their rooms in the same transaction.
+- **Joining a group with a booked room.** Accepting a member is refused with `A booked room for this group only seats N. Release or rebook it before adding another member.` when any booking dated today or later is in a room smaller than the new member count. The leader should release or rebook on the Venue page, then accept again. Bookings for past dates are ignored.
+- **Booker leaves.** When a member who made a booking leaves, is removed, or has their account deleted, the booking stays and is reassigned to the group's current leader. If the leader leaves and hands over, their bookings pass to the new leader.
+- **Account deletion.** An administrator cannot delete a student who leads an active group, so leaders close or transfer first, which clears sessions and bookings through the closing rule above.
 
 ## Group and account rules
 
@@ -179,6 +194,14 @@ Every `/api` route except student login/sign-up and administrator login requires
 | POST | `/api/groups/{id}/leader-quits?replacementLeaderId=...` | Transfer and leave; alone means close |
 | POST | `/api/groups/{id}/leader-quits?closeGroup=true` | Close and leave |
 | POST | `/api/groups/{id}/close` | Close; members remain in historical record |
+| POST | `/api/sessions` | Plan a session `{groupId, sessionDate, startTime, endTime, maxGroupSize}` (leader/administrator) |
+| GET | `/api/sessions?groupId=...` | Sessions of a group (members) |
+| GET | `/api/sessions/mine` | Bookable sessions across the student's active groups |
+| POST | `/api/sessions/{id}/cancel` | Cancel a session and release its room (leader/administrator) |
+| GET | `/api/venues/rooms` | All rooms |
+| GET | `/api/venues/recommendations?sessionId=...` | Free, suitable rooms; optional `building`, `whiteboard`, `projector`, `power` |
+| POST | `/api/venues/bookings?sessionId=...&roomId=...` | Book a room for a session (any group member) |
+| POST | `/api/venues/bookings/release?sessionId=...` | Release a session's room (any group member) |
 | GET / POST | `/api/admin/accounts` | Usage summaries / update an existing account |
 | POST | `/api/admin/accounts/invitations` | Create a Firebase-backed student with `{name, email}`; browser requests the invite email |
 | DELETE | `/api/admin/accounts/{id}` | Delete the Firebase identity if present, then the account and related records |
@@ -196,7 +219,7 @@ cd apps/backend
 cd ../..
 ```
 
-The backend suite contains 29 tests: 25 HTTP integration tests using real H2 and separate sessions, 3 focused ranking tests and 1 administrator-service test. Only the external Firebase token-verification boundary is mocked; these tests do not need a private service-account key. Coverage includes session and role checks, privacy before/after acceptance/ending, actor spoofing, nested input validation, request transitions, filters, matching strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, admin override, demo venue booking conflicts and release, session and booking cleanup when a group closes, session size limits, and 404/405 responses for unknown routes and methods.
+The backend suite contains 33 tests: 29 HTTP integration tests using real H2 and separate sessions, 3 focused ranking tests and 1 administrator-service test. Only the external Firebase token-verification boundary is mocked; these tests do not need a private service-account key. Coverage includes session and role checks, privacy before/after acceptance/ending, actor spoofing, nested input validation, request transitions, filters, matching strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, admin override, demo venue booking conflicts and release, session and booking cleanup when a group closes, session size limits, and 404/405 responses for unknown routes and methods.
 
 With a local Firebase service-account file configured and the backend JAR built, run `python3 scripts/smoke_test.py` for a real-HTTP administrator session and H2 restart check against a disposable database. It does not exercise live student sign-in. The live Firebase walkthrough is recorded in `docs/verification.md`; it used a disposable in-memory H2 database. Run it again with your own Firebase configuration before a class demonstration.
 

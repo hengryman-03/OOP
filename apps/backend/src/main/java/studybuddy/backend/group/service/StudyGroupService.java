@@ -11,7 +11,10 @@ import studybuddy.backend.connection.model.RequestStatus;
 import studybuddy.backend.group.model.*;
 import studybuddy.backend.persistence.StudyRepository;
 import studybuddy.backend.student.service.StudentService;
+import studybuddy.backend.venue.model.Room;
+import studybuddy.backend.venue.model.RoomBooking;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,6 +50,38 @@ public class StudyGroupService {
     private void requireOpen(StudyGroup group) {
         if (group.getStatus() == GroupStatus.CLOSED)
             throw DomainException.conflict("This group is closed.");
+    }
+
+    /** A member joining must still fit every room the group has booked for today or later. */
+    private void requireBookedRoomsFit(StudyGroup group) {
+        int needed = group.getMemberIds().size() + 1;
+        repository.all(RoomBooking.class).stream()
+                .filter(b -> b.getGroupId().equals(group.getId()))
+                .filter(b -> !b.getDate().isBefore(LocalDate.now()))
+                .map(b -> repository.find(Room.class, b.getRoomId()))
+                .flatMap(java.util.Optional::stream)
+                .filter(room -> room.getCapacity() < needed)
+                .mapToInt(Room::getCapacity)
+                .min()
+                .ifPresent(
+                        seats -> {
+                            throw DomainException.conflict(
+                                    "A booked room for this group only seats "
+                                            + seats
+                                            + ". Release or rebook it before adding another member.");
+                        });
+    }
+
+    /** Bookings made by a departing member pass to the group's current leader. */
+    private void reassignBookings(StudyGroup group, String departedId) {
+        repository.all(RoomBooking.class).stream()
+                .filter(b -> b.getGroupId().equals(group.getId()))
+                .filter(b -> departedId.equals(b.getBookedBy()))
+                .forEach(
+                        b -> {
+                            b.setBookedBy(group.getLeaderId());
+                            repository.save(b.getId(), b);
+                        });
     }
 
     private void validate(StudyGroup group) {
@@ -142,6 +177,7 @@ public class StudyGroupService {
                 throw DomainException.conflict("This group is full.");
             if (group.getMemberIds().contains(request.getStudentId()))
                 throw DomainException.conflict("Student is already a member.");
+            requireBookedRoomsFit(group);
             group.getMemberIds().add(request.getStudentId());
             repository.save(group.getId(), group);
         }
@@ -160,6 +196,7 @@ public class StudyGroupService {
                     "The leader must transfer leadership or close the group before leaving.");
         if (!group.getMemberIds().remove(studentId))
             throw DomainException.missing("Student is not a group member.");
+        reassignBookings(group, studentId);
         return repository.save(id, group);
     }
 
@@ -222,6 +259,7 @@ public class StudyGroupService {
                         "Choose a replacement leader or close the group before leaving.");
             transfer(group, replacement);
             group.getMemberIds().remove(oldLeader);
+            reassignBookings(group, oldLeader);
         }
         return repository.save(id, group);
     }

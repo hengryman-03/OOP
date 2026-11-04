@@ -644,6 +644,97 @@ class StudyBuddyIntegrationTest {
         assertTrue(repository.find(studybuddy.backend.session.model.StudySession.class, lone).isEmpty());
     }
 
+    /** Leader plus two joiners, with the smallest suitable room booked for a Monday session. */
+    record BookedGroup(String group, String session, String room, int seats) {}
+
+    BookedGroup groupWithBookedRoom(MockHttpSession leader, MockHttpSession booker) throws Exception {
+        String group = newGroup(leader, 12);
+        accept(leader, login("S004"), group);
+        accept(leader, login("S005"), group);
+        String session = planSession(leader, group, "10:00", "11:00", 3);
+        JsonNode room = call(leader, get("/api/venues/recommendations?sessionId=" + session), 200).get(0);
+        call(booker, post("/api/venues/bookings?sessionId=" + session + "&roomId=" + room.get("id").asText()), 200);
+        return new BookedGroup(group, session, room.get("id").asText(), room.get("capacity").asInt());
+    }
+
+    @Test
+    void joiningIsRejectedWhenABookedRoomIsFullAndAllowedOnceReleased() throws Exception {
+        var leader = login("S001");
+        BookedGroup booked = groupWithBookedRoom(leader, leader);
+        int members = 3;
+        for (int i = 6; members < booked.seats(); i++, members++)
+            accept(leader, login(String.format("S%03d", i)), booked.group());
+        String request = join(login("S030"), booked.group());
+        String rejection =
+                call(leader, post("/api/groups/join-requests/" + request + "/decision?decision=ACCEPTED"), 409)
+                        .toString();
+        assertTrue(
+                rejection.contains(
+                        "A booked room for this group only seats "
+                                + booked.seats()
+                                + ". Release or rebook it before adding another member."),
+                rejection);
+        call(leader, post("/api/venues/bookings/release?sessionId=" + booked.session()), 200);
+        call(leader, post("/api/groups/join-requests/" + request + "/decision?decision=ACCEPTED"), 200);
+    }
+
+    @Test
+    void joiningIgnoresBookingsForSessionsInThePast() throws Exception {
+        var leader = login("S001");
+        BookedGroup booked = groupWithBookedRoom(leader, leader);
+        int members = 3;
+        for (int i = 6; members < booked.seats(); i++, members++)
+            accept(leader, login(String.format("S%03d", i)), booked.group());
+        var booking =
+                repository.all(studybuddy.backend.venue.model.RoomBooking.class).stream()
+                        .filter(b -> b.getSessionId().equals(booked.session()))
+                        .findFirst()
+                        .orElseThrow();
+        booking.setDate(java.time.LocalDate.now().minusDays(1));
+        repository.save(booking.getId(), booking);
+        accept(leader, login("S030"), booked.group());
+    }
+
+    @Test
+    void bookingsMadeByADepartingMemberPassToTheLeader() throws Exception {
+        var leader = login("S001");
+        var member = login("S004");
+        BookedGroup booked = groupWithBookedRoom(leader, member);
+        var booking =
+                repository.all(studybuddy.backend.venue.model.RoomBooking.class).stream()
+                        .filter(b -> b.getSessionId().equals(booked.session()))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals("S004", booking.getBookedBy());
+        call(member, post("/api/groups/" + booked.group() + "/remove-member?studentId=S004"), 200);
+        assertEquals(
+                "S001",
+                repository
+                        .find(studybuddy.backend.venue.model.RoomBooking.class, booking.getId())
+                        .orElseThrow()
+                        .getBookedBy());
+    }
+
+    @Test
+    void bookingsMadeByADeletedAccountPassToTheLeader() throws Exception {
+        var leader = login("S001");
+        var admin = login("ADMIN001");
+        BookedGroup booked = groupWithBookedRoom(leader, login("S004"));
+        var booking =
+                repository.all(studybuddy.backend.venue.model.RoomBooking.class).stream()
+                        .filter(b -> b.getSessionId().equals(booked.session()))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals("S004", booking.getBookedBy());
+        call(admin, delete("/api/admin/accounts/S004"), 200);
+        var after =
+                repository
+                        .find(studybuddy.backend.venue.model.RoomBooking.class, booking.getId())
+                        .orElseThrow();
+        assertEquals("S001", after.getBookedBy());
+        assertEquals(booked.room(), after.getRoomId());
+    }
+
     @Test
     void roomsCannotBeBookedForAClosedGroup() throws Exception {
         var leader = login("S001");

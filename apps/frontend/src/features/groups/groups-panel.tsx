@@ -442,6 +442,11 @@ export function GroupsPanel({
           {manage(selected) && (
             <>
               <h3 className="divider">Membership requests</h3>
+              <p className="muted-text">
+                A room booked on the Venue page limits how many members can
+                join. If accepting is refused because the room is full, release
+                or rebook the room there first.
+              </p>
               {requests.filter(
                 (r) => r.groupId === selected.id && r.status === 'PENDING',
               ).length === 0 ? (
