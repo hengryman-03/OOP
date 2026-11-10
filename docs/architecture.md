@@ -1,5 +1,7 @@
 # Architecture and design decisions
 
+See the [accept group membership sequence diagram](accept-group-membership-sequence.md) for the membership acceptance flow, or open the [editable Draw.io diagram](accept-group-membership-sequence.drawio).
+
 The supplied template's `student`, `matching`, `connection`, `group`, and `admin` packages remain the domain boundaries. Controllers translate HTTP input; services enforce business rules; models describe domain data; the persistence package owns SQL and serialization. Frontend feature folders mirror these capabilities.
 
 ```mermaid
