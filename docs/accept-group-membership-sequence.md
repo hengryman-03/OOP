@@ -1,0 +1,544 @@
+﻿# Accept a Group Membership Request
+
+This sequence diagram follows the implemented `StudyGroupService.decideMembership()` flow.
+
+**Primary actor:** Study Group Leader. An administrator can also perform this action.
+
+**Preconditions:** The actor is signed in and selects a membership request. Authorization, pending status, and group activity are checked during execution.
+
+**Success outcome:** The student becomes a group member and the request status becomes `ACCEPTED`. Both changes are committed in the same transaction.
+
+```drawio
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="accept-group-membership-seq">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="2400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="ll_leader" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};participant=umlActor;" value=":Study Group Leader" vertex="1">
+          <mxGeometry x="40" y="60" width="20" height="2220" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_ui" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value=":Study Groups UI" vertex="1">
+          <mxGeometry x="130" y="60" width="120" height="2220" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_ctrl" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value=":StudyGroupController" vertex="1">
+          <mxGeometry x="300" y="60" width="140" height="2220" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_auth" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value=":SessionService" vertex="1">
+          <mxGeometry x="480" y="60" width="120" height="2220" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_svc" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value=":StudyGroupService" vertex="1">
+          <mxGeometry x="640" y="60" width="140" height="2220" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_stud" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value=":StudentService" vertex="1">
+          <mxGeometry x="820" y="60" width="120" height="2220" as="geometry" />
+        </mxCell>
+        <mxCell id="ll_repo" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;container=1;dropTarget=0;collapsible=0;recursiveResize=0;outlineConnect=0;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value=":StudyRepository" vertex="1">
+          <mxGeometry x="980" y="60" width="130" height="2220" as="geometry" />
+        </mxCell>
+        <mxCell id="act_2" parent="ll_ui" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="55" y="40" width="10" height="2140" as="geometry" />
+        </mxCell>
+        <mxCell id="act_3" parent="ll_ctrl" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="65" y="80" width="10" height="2060" as="geometry" />
+        </mxCell>
+        <mxCell id="act_4" parent="ll_auth" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="55" y="120" width="10" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="act_5" parent="ll_svc" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="65" y="190" width="10" height="1910" as="geometry" />
+        </mxCell>
+        <mxCell id="act_6" parent="ll_stud" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="55" y="775" width="10" height="340" as="geometry" />
+        </mxCell>
+        <mxCell id="act_7" parent="ll_repo" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="60" y="265" width="10" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="act_8" parent="ll_repo" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="60" y="335" width="10" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="act_9" parent="ll_repo" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="60" y="405" width="10" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="act_10" parent="ll_repo" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="60" y="810" width="10" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="act_11" parent="ll_repo" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="60" y="1395" width="10" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="act_12" parent="ll_repo" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="60" y="1495" width="10" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="act_13" parent="ll_repo" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="60" y="1845" width="10" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="act_14" parent="ll_repo" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;edgeStyle&quot;:&quot;sequenceEdgeStyle&quot;,&quot;libavoidRouting&quot;:0,&quot;curved&quot;:0,&quot;rounded&quot;:0};" value="" vertex="1">
+          <mxGeometry x="60" y="1945" width="10" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="msg_15" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Click Accept on a pending request">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="120" y="105" />
+            </Array>
+            <mxPoint x="55" y="105" as="sourcePoint" />
+            <mxPoint x="185" y="105" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_16" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="POST /api/groups/join-requests/{id}/decision?decision=ACCEPTED">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="280" y="140" />
+            </Array>
+            <mxPoint x="195" y="140" as="sourcePoint" />
+            <mxPoint x="365" y="140" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_17" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="actor(session)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="455" y="175" />
+            </Array>
+            <mxPoint x="375" y="175" as="sourcePoint" />
+            <mxPoint x="535" y="175" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_18" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Authenticated Actor">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="455" y="205" />
+            </Array>
+            <mxPoint x="535" y="205" as="sourcePoint" />
+            <mxPoint x="375" y="205" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_19" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="decideMembership(id, ACCEPTED, actor)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="540" y="245" />
+            </Array>
+            <mxPoint x="375" y="245" as="sourcePoint" />
+            <mxPoint x="705" y="245" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="note_20" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF2CC;strokeColor=#D6B656;size=14;" value="Begin database transaction" vertex="1">
+          <mxGeometry x="670" y="275" width="410" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="msg_21" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="lock()">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="325" />
+            </Array>
+            <mxPoint x="715" y="325" as="sourcePoint" />
+            <mxPoint x="1040" y="325" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_22" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Database write lock acquired">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="355" />
+            </Array>
+            <mxPoint x="1040" y="355" as="sourcePoint" />
+            <mxPoint x="715" y="355" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_23" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="find(MembershipRequest.class, id)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="395" />
+            </Array>
+            <mxPoint x="715" y="395" as="sourcePoint" />
+            <mxPoint x="1040" y="395" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_24" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="MembershipRequest">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="425" />
+            </Array>
+            <mxPoint x="1040" y="425" as="sourcePoint" />
+            <mxPoint x="715" y="425" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_25" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="find(StudyGroup.class, request.groupId)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="465" />
+            </Array>
+            <mxPoint x="715" y="465" as="sourcePoint" />
+            <mxPoint x="1040" y="465" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_26" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="StudyGroup">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="495" />
+            </Array>
+            <mxPoint x="1040" y="495" as="sourcePoint" />
+            <mxPoint x="715" y="495" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="self_27" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="requireManager(group, actor)">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="745" y="530" />
+              <mxPoint x="745" y="550" />
+            </Array>
+            <mxPoint x="715" y="530" as="sourcePoint" />
+            <mxPoint x="715" y="550" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="self_28" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="requireOpen(group)">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="745" y="570" />
+              <mxPoint x="745" y="590" />
+            </Array>
+            <mxPoint x="715" y="570" as="sourcePoint" />
+            <mxPoint x="715" y="590" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="self_29" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Validate pending status and decision">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="745" y="610" />
+              <mxPoint x="745" y="630" />
+            </Array>
+            <mxPoint x="715" y="610" as="sourcePoint" />
+            <mxPoint x="715" y="630" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="frame_30" parent="1" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;" value="break [Actor unauthorized, group closed, or request already decided]" vertex="1">
+          <mxGeometry x="25" y="650" width="1080" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="note_31" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF2CC;strokeColor=#D6B656;size=14;" value="Error handling abstracted: service exception rolls back transaction. ApiExceptionHandler returns HTTP error." vertex="1">
+          <mxGeometry x="310" y="680" width="420" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="ret_32" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="403 Forbidden or 409 Conflict">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="280" y="725" />
+            </Array>
+            <mxPoint x="365" y="725" as="sourcePoint" />
+            <mxPoint x="195" y="725" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_33" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Display error">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="120" y="755" />
+            </Array>
+            <mxPoint x="185" y="755" as="sourcePoint" />
+            <mxPoint x="55" y="755" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_34" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="requireActiveStudent(request.studentId)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="795" y="830" />
+            </Array>
+            <mxPoint x="715" y="830" as="sourcePoint" />
+            <mxPoint x="875" y="830" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_35" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="find(UserAccount.class, studentId)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="962" y="865" />
+            </Array>
+            <mxPoint x="885" y="865" as="sourcePoint" />
+            <mxPoint x="1040" y="865" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_36" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="UserAccount">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="962" y="895" />
+            </Array>
+            <mxPoint x="1040" y="895" as="sourcePoint" />
+            <mxPoint x="885" y="895" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="self_37" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Verify STUDENT role and ACTIVE status">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="915" y="930" />
+              <mxPoint x="915" y="950" />
+            </Array>
+            <mxPoint x="885" y="930" as="sourcePoint" />
+            <mxPoint x="885" y="950" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_38" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Validation passed">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="795" y="1165" />
+            </Array>
+            <mxPoint x="875" y="1165" as="sourcePoint" />
+            <mxPoint x="715" y="1165" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="frame_39" parent="1" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;" value="break [Student account missing or inactive]" vertex="1">
+          <mxGeometry x="25" y="1005" width="1080" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="note_40" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF2CC;strokeColor=#D6B656;size=14;" value="Error handling abstracted: service exception rolls back transaction. ApiExceptionHandler returns HTTP error." vertex="1">
+          <mxGeometry x="310" y="1035" width="420" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="ret_41" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="404 Not Found or 409 Conflict">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="280" y="1080" />
+            </Array>
+            <mxPoint x="365" y="1080" as="sourcePoint" />
+            <mxPoint x="195" y="1080" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_42" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Display error">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="120" y="1110" />
+            </Array>
+            <mxPoint x="185" y="1110" as="sourcePoint" />
+            <mxPoint x="55" y="1110" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="self_43" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Check group capacity and existing membership">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="745" y="1180" />
+              <mxPoint x="745" y="1200" />
+            </Array>
+            <mxPoint x="715" y="1180" as="sourcePoint" />
+            <mxPoint x="715" y="1200" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="frame_44" parent="1" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;" value="alt [Group full or student already a member]" vertex="1">
+          <mxGeometry x="20" y="1225" width="1100" height="1035" as="geometry" />
+        </mxCell>
+        <mxCell id="note_45" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF2CC;strokeColor=#D6B656;size=14;" value="Error handling abstracted: service exception rolls back transaction. ApiExceptionHandler returns HTTP error." vertex="1">
+          <mxGeometry x="310" y="1255" width="420" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="ret_46" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="409 Conflict with reason">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="280" y="1295" />
+            </Array>
+            <mxPoint x="365" y="1295" as="sourcePoint" />
+            <mxPoint x="195" y="1295" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_47" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Display error">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="120" y="1325" />
+            </Array>
+            <mxPoint x="185" y="1325" as="sourcePoint" />
+            <mxPoint x="55" y="1325" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="div_48" parent="frame_44" style="shape=line;dashed=1;dashPattern=2 2;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="0" y="135" width="1100" height="1" as="geometry" />
+        </mxCell>
+        <mxCell id="txt_49" parent="frame_44" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=0;" value="[Space available and student is not a member]" vertex="1">
+          <mxGeometry x="10" y="139" width="1080" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="self_50" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="requireBookedRoomsFit(group)">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="745" y="1395" />
+              <mxPoint x="745" y="1415" />
+            </Array>
+            <mxPoint x="715" y="1395" as="sourcePoint" />
+            <mxPoint x="715" y="1415" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_51" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="all(RoomBooking.class)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="1445" />
+            </Array>
+            <mxPoint x="715" y="1445" as="sourcePoint" />
+            <mxPoint x="1040" y="1445" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_52" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Room bookings">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="1475" />
+            </Array>
+            <mxPoint x="1040" y="1475" as="sourcePoint" />
+            <mxPoint x="715" y="1475" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="frame_53" parent="1" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;" value="loop [Each booking for this group dated today or later]" vertex="1">
+          <mxGeometry x="650" y="1515" width="450" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="msg_54" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="find(Room.class, booking.roomId)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="1545" />
+            </Array>
+            <mxPoint x="715" y="1545" as="sourcePoint" />
+            <mxPoint x="1040" y="1545" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_55" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Room if present">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="1575" />
+            </Array>
+            <mxPoint x="1040" y="1575" as="sourcePoint" />
+            <mxPoint x="715" y="1575" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="self_56" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Check room capacity against member count + 1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="745" y="1610" />
+              <mxPoint x="745" y="1630" />
+            </Array>
+            <mxPoint x="715" y="1610" as="sourcePoint" />
+            <mxPoint x="715" y="1630" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="frame_57" parent="1" style="shape=umlFrame;whiteSpace=wrap;html=1;pointerEvents=0;" value="alt [A booked room cannot fit the additional member]" vertex="1">
+          <mxGeometry x="25" y="1690" width="1080" height="570" as="geometry" />
+        </mxCell>
+        <mxCell id="note_58" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF2CC;strokeColor=#D6B656;size=14;" value="Error handling abstracted: service exception rolls back transaction. ApiExceptionHandler returns HTTP error." vertex="1">
+          <mxGeometry x="310" y="1720" width="420" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="ret_59" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="409 Conflict - release or rebook room first">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="280" y="1760" />
+            </Array>
+            <mxPoint x="365" y="1760" as="sourcePoint" />
+            <mxPoint x="195" y="1760" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_60" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Display room capacity error">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="120" y="1790" />
+            </Array>
+            <mxPoint x="185" y="1790" as="sourcePoint" />
+            <mxPoint x="55" y="1790" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="div_61" parent="frame_57" style="shape=line;dashed=1;dashPattern=2 2;strokeColor=#000000;" vertex="1">
+          <mxGeometry x="0" y="135" width="1080" height="1" as="geometry" />
+        </mxCell>
+        <mxCell id="txt_62" parent="frame_57" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontStyle=0;" value="[All relevant booked rooms fit, or no relevant bookings exist]" vertex="1">
+          <mxGeometry x="10" y="139" width="1060" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="self_63" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="group.memberIds.add(request.studentId)">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="745" y="1855" />
+              <mxPoint x="745" y="1875" />
+            </Array>
+            <mxPoint x="715" y="1855" as="sourcePoint" />
+            <mxPoint x="715" y="1875" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_64" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="save(group.id, group)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="1900" />
+            </Array>
+            <mxPoint x="715" y="1900" as="sourcePoint" />
+            <mxPoint x="1040" y="1900" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_65" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Updated StudyGroup">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="1930" />
+            </Array>
+            <mxPoint x="1040" y="1930" as="sourcePoint" />
+            <mxPoint x="715" y="1930" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="self_66" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="request.setStatus(ACCEPTED)">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="745" y="1965" />
+              <mxPoint x="745" y="1985" />
+            </Array>
+            <mxPoint x="715" y="1965" as="sourcePoint" />
+            <mxPoint x="715" y="1985" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="msg_67" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=block;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="save(id, request)">
+          <mxGeometry relative="1" width="80" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="2005" />
+            </Array>
+            <mxPoint x="715" y="2005" as="sourcePoint" />
+            <mxPoint x="1040" y="2005" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_68" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Updated MembershipRequest">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="877" y="2035" />
+            </Array>
+            <mxPoint x="1040" y="2035" as="sourcePoint" />
+            <mxPoint x="715" y="2035" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="note_69" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF2CC;strokeColor=#D6B656;size=14;" value="Commit transaction and release lock" vertex="1">
+          <mxGeometry x="670" y="2095" width="410" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="ret_70" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Accepted MembershipRequest">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="540" y="2145" />
+            </Array>
+            <mxPoint x="705" y="2145" as="sourcePoint" />
+            <mxPoint x="375" y="2145" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_71" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="200 OK with accepted request">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="280" y="2185" />
+            </Array>
+            <mxPoint x="365" y="2185" as="sourcePoint" />
+            <mxPoint x="195" y="2185" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ret_72" edge="1" parent="1" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;edgeStyle=sequenceEdgeStyle;libavoidRouting=0;curved=0;rounded=0;" value="Show updated membership and request status">
+          <mxGeometry relative="1" as="geometry" x="0.05">
+            <Array as="points">
+              <mxPoint x="120" y="2225" />
+            </Array>
+            <mxPoint x="185" y="2225" as="sourcePoint" />
+            <mxPoint x="55" y="2225" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+```
+
+## Notes
+
+- Error responses abstract exception propagation and Spring error handling. A failed check exits the acceptance flow and rolls back the transaction. Commit and success responses belong only to the successful alternatives.
+
+- The diagram starts at acceptance; submitting a join request is a separate use case.
+- Authentication interception and the UI's subsequent refresh calls are omitted for readability. `SessionService` supplies the trusted actor to the controller.
+- Missing request or group records return `404 Not Found` before acceptance proceeds.
+- The group maximum includes the leader. Capacity is rechecked during acceptance, even if space was available when the student requested to join.
+- The booked-room check is an additional rule in this implementation. Only bookings dated today or later affect acceptance; missing room records are skipped by the current code.
+- Failed acceptance leaves the pending request and group membership unchanged. Persistence failures also roll back both writes.
+
+## Implementation references
+
+- [StudyGroupController](../apps/backend/src/main/java/studybuddy/backend/group/controller/StudyGroupController.java): `decide()` endpoint.
+- [StudyGroupService](../apps/backend/src/main/java/studybuddy/backend/group/service/StudyGroupService.java): `decideMembership()`, `requireManager()`, `requireOpen()`, and `requireBookedRoomsFit()`.
+- [StudentService](../apps/backend/src/main/java/studybuddy/backend/student/service/StudentService.java): `requireActiveStudent()`.
+- [ApiExceptionHandler](../apps/backend/src/main/java/studybuddy/backend/common/ApiExceptionHandler.java): HTTP error mapping.
+
+Open the accompanying accept-group-membership-sequence.drawio file in diagrams.net or with the VS Code Draw.io Integration extension to view and edit the diagram.
+
