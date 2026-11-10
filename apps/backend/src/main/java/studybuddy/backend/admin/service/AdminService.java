@@ -1,5 +1,6 @@
 package studybuddy.backend.admin.service;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,7 +12,6 @@ import studybuddy.backend.connection.model.*;
 import studybuddy.backend.group.model.*;
 import studybuddy.backend.persistence.StudyRepository;
 import studybuddy.backend.student.model.StudentProfile;
-import studybuddy.backend.venue.model.RoomBooking;
 
 import java.util.List;
 import java.util.Locale;
@@ -20,10 +20,13 @@ import java.util.Locale;
 public class AdminService {
     private final StudyRepository repository;
     private final FirebaseConfig firebase;
+    private final ApplicationEventPublisher events;
 
-    public AdminService(StudyRepository repository, FirebaseConfig firebase) {
+    public AdminService(
+            StudyRepository repository, FirebaseConfig firebase, ApplicationEventPublisher events) {
         this.repository = repository;
         this.firebase = firebase;
+        this.events = events;
     }
 
     /** Provision the same UID used by student self-registration. The UI sends the invite email. */
@@ -198,15 +201,7 @@ public class AdminService {
                         g -> {
                             g.getMemberIds().remove(id);
                             repository.save(g.getId(), g);
-                            // Bookings the deleted member made pass to the group's leader.
-                            repository.all(RoomBooking.class).stream()
-                                    .filter(b -> b.getGroupId().equals(g.getId()))
-                                    .filter(b -> id.equals(b.getBookedBy()))
-                                    .forEach(
-                                            b -> {
-                                                b.setBookedBy(g.getLeaderId());
-                                                repository.save(b.getId(), b);
-                                            });
+                            events.publishEvent(new MemberLeftEvent(g.getId(), id, g.getLeaderId()));
                         });
         repository.delete(StudentProfile.class, id);
         repository.delete(UserAccount.class, id);
