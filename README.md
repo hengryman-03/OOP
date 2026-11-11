@@ -151,10 +151,10 @@ For the algorithm concepts, trade-offs and presentation example, see [matching a
 
 ## Study sessions and venue booking
 
-Group leaders (or an administrator) plan study sessions for an active group: a date that has not passed, a start and end time in whole minutes, and a session size. Dates are entered and shown as dd/mm/yyyy throughout the interface. Rooms are seeded demo data, each with a capacity, features (whiteboard, projector, power sockets) and weekly opening hours. The **Venue** page lists the signed-in student's sessions, recommends rooms for one and books the chosen room.
+The group leader plans study sessions for an active group: a date that has not passed, a start and end time in whole minutes, and a session size. Dates are entered and shown as dd/mm/yyyy throughout the interface. Rooms are seeded demo data, each with a capacity, features (whiteboard, projector, power sockets) and weekly opening hours. The **Venue** page lists the signed-in student's sessions, recommends rooms for one and books the chosen room.
 
 - **Editing a session.** The leader (or an administrator) can edit a session's date, times and size from **Study groups → Edit**; the same rules apply as when planning. If the session has a room, the booking is kept only while the date and times are unchanged and the room still seats the session size; otherwise the booking is released (the interface asks for confirmation first) and can be rebooked on the Venues page. Closed groups cannot be edited.
-- **Who can book.** The leader, any member of the group, or an administrator can book or release a room, so a member can help when the leader needs it. Planning or cancelling a session is leader/administrator only. Booking again for the same session replaces its earlier booking.
+- **Who can book.** The leader, any member of the group, or an administrator can book or release a room, so a member can help when the leader needs it. Only the group leader can plan a session. The leader or an administrator can edit or cancel one. Booking again for the same session replaces its earlier booking.
 - **Recommendations.** Rooms are filtered by building and features, must be open for the whole session, must not clash with another booking and must seat the group; results are ordered smallest suitable room first.
 - **Room size.** The room must seat the larger of the session size and the group's current member count. The session size cannot be lower than the current members or above the group's maximum.
 - **Closed groups.** Rooms cannot be booked or recommended for a closed group. Closing a group (including the leader leaving and closing it) deletes its sessions and releases their rooms in the same transaction.
@@ -225,7 +225,7 @@ Every `/api` route except student login/sign-up and administrator login requires
 | POST | `/api/groups/{id}/leader-quits?replacementLeaderId=...` | Transfer and leave; alone means close |
 | POST | `/api/groups/{id}/leader-quits?closeGroup=true` | Close and leave |
 | POST | `/api/groups/{id}/close` | Close; members remain in historical record |
-| POST | `/api/sessions` | Plan a session `{groupId, sessionDate, startTime, endTime, maxGroupSize}` (leader/administrator) |
+| POST | `/api/sessions` | Plan a session `{groupId, sessionDate, startTime, endTime, maxGroupSize}` (leader) |
 | PUT | `/api/sessions/{id}` | Edit a session's date, times and size; releases the room if it no longer fits (leader/administrator) |
 | GET | `/api/sessions?groupId=...` | Sessions of a group (members) |
 | GET | `/api/sessions/mine` | Bookable sessions across the student's active groups |
@@ -251,7 +251,7 @@ cd apps/backend
 cd ../..
 ```
 
-The backend suite contains 40 tests: 30 HTTP integration tests using real H2 and separate sessions, 3 focused ranking tests, 1 administrator-service test, and 6 storage tests covering Firestore-mode staging, transaction rollback and the record-to-document mapping of all seeded data. Only the external Firebase token-verification boundary is mocked; these tests do not need a private service-account key. Coverage includes session and role checks, privacy before/after acceptance/ending, actor spoofing, nested input validation, request transitions, filters, matching strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, admin override, demo venue booking conflicts and release, session and booking cleanup when a group closes, session size limits, and 404/405 responses for unknown routes and methods.
+The backend suite contains 41 tests: 31 HTTP integration tests using real H2 and separate sessions, 3 focused ranking tests, 1 administrator-service test, and 6 storage tests covering Firestore-mode staging, transaction rollback and the record-to-document mapping of all seeded data. Only the external Firebase token-verification boundary is mocked; these tests do not need a private service-account key. Coverage includes session and role checks, privacy before/after acceptance/ending, actor spoofing, nested input validation, request transitions, filters, matching strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, admin override, demo venue booking conflicts and release, session and booking cleanup when a group closes, session size limits, and 404/405 responses for unknown routes and methods.
 
 Four further live Firestore tests run only on request, because they need the Firebase Admin credential and internet: `cd apps/backend && FIRESTORE_LIVE_TEST=true ./mvnw test -Dtest=FirestoreLiveTest`. They use randomly prefixed collections that are deleted afterwards, and check seeding, a buddy request accepted end to end, that a failed action sends nothing, and that a change written by another backend becomes visible.
 
