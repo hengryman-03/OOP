@@ -2,7 +2,7 @@
 
 See the [accept group membership sequence diagram](accept-group-membership-sequence.md) for the membership acceptance flow, or open the [editable Draw.io diagram](accept-group-membership-sequence.drawio).
 
-The supplied template's `student`, `matching`, `connection`, `group`, and `admin` packages remain the domain boundaries. Controllers translate HTTP input; services enforce business rules; models describe domain data; the persistence package owns SQL and serialization. Frontend feature folders mirror these capabilities.
+The supplied template's `student`, `matching`, `connection`, `group`, and `admin` packages remain the domain boundaries. Controllers translate HTTP input; services enforce business rules; models describe domain data; the persistence package owns storage and serialization behind the `StudyRepository` interface. Frontend feature folders mirror these capabilities.
 
 ```mermaid
 flowchart LR
@@ -13,8 +13,9 @@ flowchart LR
     Proxy --> Session[Session and origin checks]
     Session --> Controllers[Domain controllers]
     Controllers --> Services[Domain services]
-    Services --> Repository[StudyRepository]
-    Repository --> H2[(File-backed H2)]
+    Services --> Repository[StudyRepository interface]
+    Repository --> H2[(File-backed H2, default)]
+    Repository -. APP_STORAGE=firestore .-> Firestore[(Cloud Firestore, optional)]
     Config[MatchingProperties defaults] --> Matching[MatchingService]
     Matching --> Repository
 ```
@@ -58,14 +59,14 @@ classDiagram
 - `MatchingService` filters candidates, evaluates five compatibility factors and constructs a public score breakdown. `MatchRanker` then applies one of four deterministic policies: weighted score, availability-first, course-first or non-dominated Pareto fronts. Configuration and candidate filtering stay separate from ranking.
 - `StudyGroupService` owns membership capacity, decisions, closure, and transfer/exit transitions. Group update preserves membership/status/leader fields even if a client supplies forged values.
 - `AdminService` handles account lifecycle across profiles, requests, and groups inside one H2 transaction. It compensates for a failed save after Firebase provisioning and deletes Firebase before H2 records so failed Firebase deletion leaves application data intact. Firebase and H2 cannot share a transaction; an H2 failure after Firebase deletion needs an administrator retry. Active leadership prevents deletion/suspension until transferred or closed.
-- `StudyRepository` isolates JSON aggregate persistence. Its lock is acquired before all business writes. H2 transactions roll back the whole action on a business error. A concurrent capacity test verifies the shared lock protects the last available seat.
+- `StudyRepository` is an interface that isolates aggregate persistence; services depend only on it (dependency inversion). Its lock is acquired before all business writes. `H2StudyRepository` (default) uses H2 transactions to roll back the whole action on a business error; a concurrent capacity test verifies the shared lock protects the last available seat. `FirestoreStudyRepository` (optional, `APP_STORAGE=firestore`) keeps the same contract: `StagedWrites` holds an action's changes and sends them as one Firestore batch only on commit, `InProcessTransactionManager` lets the existing `@Transactional` methods mark those boundaries without a SQL database, and `FirestoreMirror` serves reads from a live in-memory copy kept current by Firestore snapshot listeners (Observer pattern).
 - `DemoDataInitializer` checks a persisted marker inside the same lock/transaction. It does not reseed based on current student count, which would incorrectly recreate deleted accounts.
 - `ApiExceptionHandler` provides consistent errors without exposing SQL, stack traces, or internal exception details to the browser.
 - Frontend feature components own local form state; the workspace shell loads current data, switches accounts, and clears prior-account screens. The typed client sends cookie-backed requests through Next.js and parses API errors.
 
 ## Deliberate limits
 
-H2 JSON aggregates retain the starter's simple POJOs. They provide real restart persistence but no SQL-level foreign keys on JSON fields. Services enforce relationships. All writes serialize on a database row; this is appropriate for the 50-profile demonstration, with lower throughput than per-aggregate locking. There is no distributed cache, queue, or background notification service.
+H2 JSON aggregates retain the starter's simple POJOs. They provide real restart persistence but no SQL-level foreign keys on JSON fields. Services enforce relationships. All writes serialize on a database row; this is appropriate for the 50-profile demonstration, with lower throughput than per-aggregate locking. There is no distributed cache, queue, or background notification service. In Firestore mode the write lock covers one backend process, so two backends writing at the same moment can overwrite each other; demonstrations should run one backend per shared data set.
 
 The frontend uses one App Router page with domain components and tab navigation, preserving the template's single dashboard model. Tabs are not bookmarkable routes. State refresh is explicit after mutations or through Refresh data; there is no live cross-browser push. The current session identity is shared between tabs of the same browser cookie context.
 

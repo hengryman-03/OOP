@@ -1,12 +1,12 @@
 # Study Buddy Matcher System
 
-A coursework application built on the supplied Nx monorepo template: a Java 25 / Spring Boot 3.5 backend, a Next.js/React frontend, Firebase Authentication for students, and file-backed H2 persistence. Students can manage study preferences, find compatible buddies, exchange requests, and manage study groups. Administrators manage accounts and the matching engine.
+A coursework application built on the supplied Nx monorepo template: a Java 25 / Spring Boot 3.5 backend, a Next.js/React frontend, Firebase Authentication for students, and file-backed H2 persistence by default, with optional shared Cloud Firestore storage. Students can manage study preferences, find compatible buddies, exchange requests, and manage study groups. Administrators manage accounts and the matching engine.
 
 ## Run locally
 
 Requirements: Node.js 22 LTS with npm and JDK 25. The Maven wrapper downloads Maven automatically. An internet connection is required for the first dependency install.
 
-Student login needs a Firebase project with Email/Password sign-in enabled. Copy `apps/frontend/.env.example` to `apps/frontend/.env` and fill in its `NEXT_PUBLIC_FIREBASE_*` web-app values. Keep the Firebase Admin service-account JSON **outside the project directory** (including `apps/backend/src/main/resources`, which Maven packages into the app) and set `FIREBASE_SERVICE_ACCOUNT` to its plain absolute path before starting the backend. The public web config is not a service-account credential. The backend intentionally refuses to start when its private credential is missing; do not commit that JSON file. `FIREBASE_DATABASE_URL` has a project default and is used by the Firebase Admin initialisation, while application records remain in H2.
+Student login needs a Firebase project with Email/Password sign-in enabled. Copy `apps/frontend/.env.example` to `apps/frontend/.env` and fill in its `NEXT_PUBLIC_FIREBASE_*` web-app values. Keep the Firebase Admin service-account JSON **outside the project directory** (including `apps/backend/src/main/resources`, which Maven packages into the app) and set `FIREBASE_SERVICE_ACCOUNT` to its plain absolute path before starting the backend. The public web config is not a service-account credential. The backend intentionally refuses to start when its private credential is missing; do not commit that JSON file. `FIREBASE_DATABASE_URL` has a project default and is used by the Firebase Admin initialisation. Application records are stored in H2 unless Firestore storage is selected (see [Storage options](#storage-options)).
 
 From this project directory:
 
@@ -69,7 +69,7 @@ apps/
       venue/        controller, service, model: rooms, recommendations and room bookings
       admin/        controller, service, model: account lifecycle and usage
       auth/         Firebase token verification, sessions, trusted Actor, API interception
-      persistence/  H2 repository and one-time deterministic seed data
+      persistence/  StudyRepository interface, H2 (default) and Firestore implementations, one-time seed data
       common/       validation helpers and consistent API errors
       config/       origins and request-interceptor configuration
     src/main/resources/
@@ -93,6 +93,34 @@ The original package names, model names, controller/service/model separation, fr
 Every business mutation runs in a database transaction and takes a shared database row lock before reading business state. This makes request duplicate checks, group capacity, and cross-record deletion atomic. Reads deserialize fresh objects, so a failed operation cannot leak partially modified in-memory objects. The trade-off is serialized writes and application-enforced relationships; this suits a small, single-process coursework system. It is not a normalized relational schema or a design for large-scale search. A production version would use purpose-specific tables, constraints, migrations, and narrower locks.
 
 The default database is `apps/backend/data/studybuddy.mv.db` when launched with the documented commands. Do not run two backend processes against that file. To make a fresh demonstration database, stop the backend and **move** the `apps/backend/data` directory to a backup location before restarting. Restarting alone preserves all changes. HTTP sessions expire after 60 minutes and are intentionally not persisted.
+
+### Storage options
+
+`StudyRepository` is an interface with two implementations, chosen when the backend starts. Services depend only on the interface, so neither one changes any business rule.
+
+| | H2 (default) | Firestore (optional) |
+| --- | --- | --- |
+| Start with | `npm run dev` | `APP_STORAGE=firestore npm run dev` |
+| Where data lives | One file on the laptop running the backend | Cloud Firestore in the same Firebase project used for sign-in |
+| Shared between laptops | No | Yes: every backend started in Firestore mode sees the same data |
+| Needs internet | Only for student sign-in | Yes |
+| All-or-nothing writes | H2 transaction rollback | Writes are staged and sent as one Firestore batch only if the action succeeds |
+| One write at a time | Database row lock | In-process lock (one backend only, see below) |
+
+How Firestore mode works:
+
+- **Layout.** One collection per record kind (`StudentProfile`, `StudyGroup`, ...), one document per record, with the record's fields as document fields. `FIRESTORE_COLLECTION_PREFIX` can keep a separate data set in the same project.
+- **Reads.** `FirestoreMirror` keeps a live in-memory copy of each collection using Firestore snapshot listeners. Reads are served from memory, and Firestore pushes changes from other backends within about a second. Only changed documents count as Firestore reads after the first load.
+- **Writes.** `@Transactional` methods still mark each action. `FirestoreStudyRepository` stages saves and deletes in `StagedWrites` and sends them in one batch just before commit. If the action fails, nothing is sent. Because there is no SQL database in this mode, `InProcessTransactionManager` provides the transaction boundaries.
+- **Seeding.** The first backend to start against an empty Firestore loads the same demo data as H2, once.
+- **Updates appear on refresh.** As in H2 mode, the browser shows other users' changes when the page is refreshed. There is no live push to the browser.
+
+Limits of Firestore mode, stated plainly:
+
+- The write lock covers one backend process. Two backends writing to the same Firestore at the same moment can overwrite each other's changes. Run one backend per shared data set for demonstrations.
+- H2 and Firestore data are separate and are not synchronised with each other.
+- The first request after startup is slower while each collection loads. One action can change at most 500 records (Firestore's batch limit), far above anything the app does.
+- The Firebase free tier allows 50,000 document reads per day. The in-memory copy keeps normal use well below that.
 
 ## Matching formula
 
@@ -157,7 +185,9 @@ Backend environment variables:
 | `DATABASE_USERNAME` | `sa` | H2 username |
 | `DATABASE_PASSWORD` | empty | Local H2 password |
 | `FIREBASE_SERVICE_ACCOUNT` | none supplied | Plain absolute path to the private Firebase Admin JSON key outside the project directory; required to start the backend |
-| `FIREBASE_DATABASE_URL` | Project Realtime Database URL | Firebase Admin initialisation; study data still uses H2 |
+| `FIREBASE_DATABASE_URL` | Project Realtime Database URL | Firebase Admin initialisation; not used for study data |
+| `APP_STORAGE` | `h2` | `h2` for the local file database, or `firestore` for shared Cloud Firestore (see [Storage options](#storage-options)) |
+| `FIRESTORE_COLLECTION_PREFIX` | empty | Firestore mode only: prefix for collection names, to keep a separate data set |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Demo values in `application.properties` | Separate administrator sign-in; override for shared use |
 | `CORS_ALLOWED_ORIGINS` | localhost and 127.0.0.1 on ports 3000 and 4200 | Comma-separated browser origins |
 
@@ -221,7 +251,9 @@ cd apps/backend
 cd ../..
 ```
 
-The backend suite contains 35 tests: 31 HTTP integration tests using real H2 and separate sessions, 3 focused ranking tests and 1 administrator-service test. Only the external Firebase token-verification boundary is mocked; these tests do not need a private service-account key. Coverage includes session and role checks, privacy before/after acceptance/ending, actor spoofing, nested input validation, request transitions, filters, matching strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, admin override, demo venue booking conflicts and release, session and booking cleanup when a group closes, session size limits, and 404/405 responses for unknown routes and methods.
+The backend suite contains 41 tests: 31 HTTP integration tests using real H2 and separate sessions, 3 focused ranking tests, 1 administrator-service test, and 6 storage tests covering Firestore-mode staging, transaction rollback and the record-to-document mapping of all seeded data. Only the external Firebase token-verification boundary is mocked; these tests do not need a private service-account key. Coverage includes session and role checks, privacy before/after acceptance/ending, actor spoofing, nested input validation, request transitions, filters, matching strategies, duplicate-slot overlap, group capacity, simultaneous acceptance, ownership preservation, leader exit, closed groups, origin restrictions, account suspension/deletion, admin override, demo venue booking conflicts and release, session and booking cleanup when a group closes, session size limits, and 404/405 responses for unknown routes and methods.
+
+Four further live Firestore tests run only on request, because they need the Firebase Admin credential and internet: `cd apps/backend && FIRESTORE_LIVE_TEST=true ./mvnw test -Dtest=FirestoreLiveTest`. They use randomly prefixed collections that are deleted afterwards, and check seeding, a buddy request accepted end to end, that a failed action sends nothing, and that a change written by another backend becomes visible.
 
 With a local Firebase service-account file configured and the backend JAR built, run `python3 scripts/smoke_test.py` for a real-HTTP administrator session and H2 restart check against a disposable database. It does not exercise live student sign-in. The live Firebase walkthrough is recorded in `docs/verification.md`; it used a disposable in-memory H2 database. Run it again with your own Firebase configuration before a class demonstration.
 
@@ -231,7 +263,7 @@ See [docs/verification.md](docs/verification.md) for the live Firebase browser c
 
 ## Libraries and assumptions
 
-Spring Boot 3.5.16 supports the branch's Java 25 target. Next.js 16, React 19, TypeScript, Tailwind/PostCSS, and Nx remain in the template structure. Spring Validation handles input constraints; Spring JDBC and H2 provide local persistence; JUnit/Spring Test verify service/database behaviour. Firebase Authentication is required for live student login; matching itself uses no external API or AI service.
+Spring Boot 3.5.16 supports the branch's Java 25 target. Next.js 16, React 19, TypeScript, Tailwind/PostCSS, and Nx remain in the template structure. Spring Validation handles input constraints; Spring JDBC and H2 provide local persistence by default; the Google Cloud Firestore client bundled with `firebase-admin` provides the optional shared storage (no extra dependency); JUnit/Spring Test verify service/database behaviour. Firebase Authentication is required for live student login; matching itself uses no external API or AI service.
 
 The template represents one current matching preference and one primary study goal per student/group. Weekly availability can contain multiple slots. There is no chat, notification delivery, attendance tracking, or automatic scheduling in the required scope; request inboxes and group status provide in-app feedback. Personal team assignments and a final presentation deck need the team's own authorship. This implementation includes a demo guide and architecture/UML material, not invented contributions or a completed presentation.
 
