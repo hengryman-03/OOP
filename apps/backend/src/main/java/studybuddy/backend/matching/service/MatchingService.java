@@ -5,6 +5,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import studybuddy.backend.auth.Actor;
 import studybuddy.backend.common.StudyValidation;
+import studybuddy.backend.connection.model.RequestStatus;
+import studybuddy.backend.connection.service.ConnectionService;
 import studybuddy.backend.matching.config.MatchingProperties;
 import studybuddy.backend.matching.model.*;
 import studybuddy.backend.persistence.StudyRepository;
@@ -20,12 +22,17 @@ public class MatchingService {
     private final StudentService students;
     private final MatchingProperties defaults;
     private final StudyRepository repository;
+    private final ConnectionService connections;
 
     public MatchingService(
-            StudentService students, MatchingProperties defaults, StudyRepository repository) {
+            StudentService students,
+            MatchingProperties defaults,
+            StudyRepository repository,
+            ConnectionService connections) {
         this.students = students;
         this.defaults = defaults;
         this.repository = repository;
+        this.connections = connections;
     }
 
     public MatchingProperties getCurrentConfig() {
@@ -64,8 +71,21 @@ public class MatchingService {
                         : courseCode;
         MatchingProperties config = getCurrentConfig();
         int[] weights = effectiveWeights(config);
+        // Buddies and pending requests are handled in Connections, so they would only use up result slots here.
+        Set<String> linked = new HashSet<>();
+        connections.listForStudent(studentId).stream()
+                .filter(
+                        r ->
+                                r.getStatus() == RequestStatus.PENDING
+                                        || r.getStatus() == RequestStatus.ACCEPTED)
+                .forEach(
+                        r -> {
+                            linked.add(r.getSenderId());
+                            linked.add(r.getReceiverId());
+                        });
         List<MatchRanker.Candidate> candidates = students.findAll().stream()
                 .filter(s -> !s.getId().equals(studentId))
+                .filter(s -> !linked.contains(s.getId()))
                 .filter(
                         s ->
                                 courseCode == null

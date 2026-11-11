@@ -209,6 +209,34 @@ class StudyBuddyIntegrationTest {
     }
 
     @Test
+    void matchesHidePendingAndConnectedStudentsUntilTheRequestCloses() throws Exception {
+        var admin = login("ADMIN001");
+        ObjectNode config = (ObjectNode) call(admin, get("/api/admin/matching-config"), 200);
+        config.put("maxResults", 50);
+        call(admin, put("/api/admin/matching-config"), config, 200);
+        var a = login("S001");
+        var b = login("S002");
+        assertTrue(matchIds(a, "S001").contains("S002"));
+        String id = request(a, "S002");
+        assertFalse(matchIds(a, "S001").contains("S002"));
+        assertFalse(matchIds(b, "S002").contains("S001"));
+        call(b, post("/api/connections/requests/" + id + "/status?status=ACCEPTED"), 200);
+        assertFalse(matchIds(a, "S001").contains("S002"));
+        call(a, post("/api/connections/requests/" + id + "/status?status=ENDED"), 200);
+        assertTrue(matchIds(a, "S001").contains("S002"));
+        assertTrue(matchIds(b, "S002").contains("S001"));
+        call(b, post("/api/connections/requests/" + request(a, "S002") + "/status?status=DECLINED"), 200);
+        assertTrue(matchIds(a, "S001").contains("S002"));
+    }
+
+    java.util.List<String> matchIds(MockHttpSession session, String id) throws Exception {
+        var ids = new java.util.ArrayList<String>();
+        for (JsonNode m : call(session, get("/api/students/" + id + "/matches"), 200))
+            ids.add(m.get("student").get("id").asText());
+        return ids;
+    }
+
+    @Test
     void preventsDuplicateReverseSelfAndInvalidBuddyRequests() throws Exception {
         var a = login("S001");
         var b = login("S002");
