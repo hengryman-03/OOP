@@ -1,6 +1,6 @@
 # Study buddy matching algorithms
 
-The endpoint first applies explicit search filters, then evaluates each remaining peer against the searching student. It does not compare students who failed a filter. Five factors are between 0 and 1: preferred/current course, shared weekly availability, meeting mode, study goal and arrangement/group size. The formula and boundaries are in [README.md](../README.md#matching-formula).
+The endpoint first applies explicit search filters, then evaluates each remaining peer against the searching student. It does not compare students who failed a filter, or students the searcher already has a pending request or an active connection with. Five factors are between 0 and 1: preferred/current course, shared weekly availability, meeting mode, study goal and arrangement/group size. The formula and boundaries are in [README.md](../README.md#matching-formula).
 
 The compatibility score is the sum of five rounded contributions. Administrator weights are normalised to 100 points. This score answers **how compatible?** The selected strategy answers **which trade-off should rank first?** Student ID settles any remaining tie, so repeated searches over the same data return the same order.
 
